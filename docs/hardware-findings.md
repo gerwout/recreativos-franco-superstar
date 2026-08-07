@@ -287,8 +287,9 @@ decodes.
 
 ### 4.4 Three rules the firmware imposes
 
-Both were found the hard way, by a machine that booted, refreshed its display and
-completed its sound handshake while the foreground program was dead.
+The first two were found the hard way, by a machine that booted, refreshed its
+display and completed its sound handshake while the foreground program was dead.
+The third was found the same way, by a soak that kept serving the same ball.
 
 * **Caída de bolas must read closed at rest.** It is closed whenever a ball is
   sitting in the trough. Both the game-start path at `0x0508` and the fault
