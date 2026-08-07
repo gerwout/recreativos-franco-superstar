@@ -2,10 +2,10 @@
 
 PinMAME driver: `src/wpc/rfranco.c` / `rfranco.h` / `rfrancogames.c`
 ROM sets: `supstarf` (set 1, 9 operator adjustment zones — the revision the factory
-manual documents), `supstarfa` (set 2, newer firmware, 25 zones)
+manual documents), `supstarfa` (set 2, newer firmware, 19 zones)
 
 Boards: CPU 53/3291 (8085A + 8035 sound + 2 x AY-3-8910), driver 53/3308,
-display 53/3307, PSU 53/3309, interconnect 53/3310, bumper/eject 53/3311.
+display 53/3307, PSU 53/3309, interconnect 53/3310, bumper/slingshot 53/3311.
 
 Everything below is derived from the driver source, the factory manual
 (`../super-star-pinball-manual.md`, including its *Fe de erratas*) and a
@@ -34,7 +34,7 @@ are marked.
 | Tilt (*falta*) | 1 | **not a switch and not reachable from VPX** — see §1.5 |
 | Lamps | 8 matrix columns, 44 that can light | `1`–`64` (see §2) |
 | Solenoids, CPU-driven | 8 of 10 decoder outputs actually used | `2`–`5`, `7`–`10` |
-| Solenoids, synthesised by the driver | 4 (bumpers and ejects) | `17`–`20` |
+| Solenoids, synthesised by the driver | 4 (bumpers and slingshots) | `17`–`20` |
 | Flippers | 2, not CPU-controlled | buttons `112` / `114` in, solenoids `45`–`48` out |
 | Display segments | 30 HDSP-3400 digits | LED indices `0`–`33` (see §4) |
 | DIP switches | 2 used of 16 | door switches, see §1.6 |
@@ -47,7 +47,7 @@ Absences that will trip up a table author:
 * **No flipper switches and no CPU flipper control.** The flipper buttons feed
   the coils directly through the interconnect board.
 * **No coin-door slam switch and no ball-shooter switch.**
-* **The two pop bumpers and the two eject holes fire on their own board**
+* **The two pop bumpers and the two slingshots fire on their own board**
   (53/3311), straight from their playfield switches. The CPU never commands
   them; the driver synthesises solenoids 17–20 so you have something to hang a
   sound and a flasher on — see §3.2.
@@ -74,12 +74,12 @@ contact, and the ROM's own switch-test table at `0x34A2` lists the same order.
 
 | # | Bus | Spanish name | English name | Playfield location | Notes |
 |---|---|---|---|---|---|
-| 11 | AD0 | 10 PUNTOS | 10-point rollover | lower playfield | **Paralleled pair**: manual contacts 24 + 25. Either bulb-switch closes 11. Momentary. |
+| 11 | AD0 | 10 PUNTOS | Slingshot (*rechazador*) contacts | lower left and lower right | **Paralleled pair**: manual contacts 24 + 25, one inside each slingshot body. Either one closes 11 and the CPU cannot tell which. Also fires synthetic solenoids **19 and 20** — see §3.2. Momentary. |
 | 12 | AD1 | BUMPER DERECHO | Right pop bumper | upper right | Also triggers synthetic solenoid **18**. Momentary. |
 | 13 | AD2 | DIANA IZQUIERDA | Left drop-target bank, "any target" | left bank | Bank-level contact. The individual targets are 33–37. **Pulse this as well as closing the individual target.** |
-| 14 | AD3 | RAMPA ESPECIAL IZQUIERDA | Left special ramp / eject hole | upper left | Also triggers synthetic solenoid **19**. |
+| 14 | AD3 | RAMPA ESPECIAL IZQUIERDA | Left special lane | upper left outer lane | A rollover, **not** a hole and **not** a coil. Collects the special when lamp 52 is lit. |
 | 15 | AD4 | DIANA DERECHA | Right drop-target bank, "any target" | right bank | Bank-level contact. Individual targets 38, 41–44. |
-| 16 | AD5 | RAMPA ESPECIAL DERECHA | Right special ramp / eject hole | upper right | Also triggers synthetic solenoid **20**. |
+| 16 | AD5 | RAMPA ESPECIAL DERECHA | Right special lane | upper right outer lane | A rollover, **not** a hole and **not** a coil. Collects the special when lamp 42 is lit. |
 | 17 | AD6 | 100 PUNTOS | 100-point rollover | mid playfield | **Paralleled pair**: manual contacts 10 + 21. Momentary. |
 | 18 | AD7 | BUMPER IZQUIERDO | Left pop bumper | upper left | Also triggers synthetic solenoid **17**. Momentary. |
 
@@ -91,17 +91,18 @@ back through the 8212 latch. Driver-board connector JO; CPU-board connector JC.
 
 | # | Port bit | Spanish name | English name | Location | Notes |
 |---|---|---|---|---|---|
-| 21 | PA0 | — | — | — | **Not wired, and never read by the ROM.** Leave it alone. |
-| 22 | PA1 | — | — | — | **Not wired, never read.** |
-| 23 | PA2 | — | — | — | **Not wired, never read.** |
-| 24 | PA3 | — | — | — | **Not wired, never read.** |
+| 21 | PA0 | — | *(borrowed)* FALTA (tilt) | cabinet | Not a real contact — the game never reads this bit. The driver borrows it to raise RST 6.5, which is how the tilt pendulum reaches the CPU. See §1.5. |
+| 22 | PA1 | — | — | — | **Not wired, never read.** Free. |
+| 23 | PA2 | — | *(borrowed)* AJUSTE switch up | coin door | Not a real contact — the game never reads this bit. The driver borrows it so a front end can lift the **ajuste** door switch while the machine runs, which the DIP setting cannot do. See §5.1. |
+| 24 | PA3 | — | *(borrowed)* TEST switch up | coin door | Same, for the **test** door switch. |
 | 25 | PA4 | MONEDERO 25 PTS. | 25 pta coin slot | coin door | **Required.** Must be a short pulse — see §6.1. |
 | 26 | PA5 | MONEDERO 100 PTS. | 100 pta coin slot | coin door | **Required.** Must be a short pulse — see §6.1. |
 | 27 | PA6 | CAIDA DE BOLAS | Ball drain / outhole | trough | **Required, and must read CLOSED at rest** — see §6.1. Manual contact 28; the driver board also labels this net *contacto final partidas*. |
 | 28 | PA7 | PULSADOR PARTIDAS | Start button | cabinet front | **Required.** Manual contact 29. Also the "advance" button inside every operator menu. |
 
 Only bits 4–7 are ever tested by the game program (verified by exhaustive search
-of the reads of `C027`). Switches 21–24 have no effect whatsoever.
+of the reads of `C027`), which is why the driver is free to borrow the low four.
+21 is *falta* (§1.5), 23 and 24 are the door switches (§5.1), and 22 does nothing.
 
 ### 1.3 Column 3 — the serial 74165 chain, left half (driver-board IC6, connector JM)
 
@@ -158,10 +159,12 @@ The tilt pendulum reaches the CPU on JD1 and pulses **RST 6.5** (vector `0x0034`
 In standalone PinMAME it is bit `0x0100` of the common input port
 ("Falta (Tilt)", default key `INSERT`).
 
-> **Under VPX there is currently no way to trigger it at all.** The driver raises
-> RST 6.5 from inside `SWITCH_UPDATE`, which only runs when PinMAME is handling
-> the keyboard — and VPinMAME turns that off. See `driver-notes.md`; this needs a
-> driver change before a table can tilt.
+**From a front end, close switch 21.** The ROM never reads that bit of the
+cabinet byte, so the driver borrows it: closing 21 asserts RST 6.5 and opening
+it releases the line. It is a level, not a pulse — the ROM leaves RST 6.5 masked
+except for one instruction per TRAP pass, so a pulse shorter than a frame is
+armed and gone again before the CPU can look. Hold it for as long as your
+pendulum is swinging.
 
 ### 1.6 Operator door switches — DIP 1 and 2
 
@@ -355,8 +358,8 @@ In VPX: `SolCallback(n) = "SubName"`.
 
 | # | Code | Pin | Spanish name | English name | Function | Used by the ROM? |
 |---|---|---|---|---|---|---|
-| 1 | 0 | JL10 | — | *(unwired)* | Connector pin is N.C. | never asserted |
-| 2 | 1 | JL6 | TACA / PARTIDA ESPECIAL | Knocker | Bangs on every *especial* (replay) award | yes |
+| 1 | 0 | JL10 | — | *(unwired)* | The connector pin is N.C. — but see the caveat below: the manual puts TACA here and the N.C. on output 1, and the ROM disagrees. | never asserted |
+| 2 | 1 | JL6 | TACA / PARTIDA ESPECIAL | Knocker | Bangs on every *especial* (replay) award — **observed**, on both sets. It fires even when the credit itself is refused because the machine is already at the zone-16 maximum. See the caveat below. | yes |
 | 3 | 2 | JL7 | BOBINA MONEDERO | Coin-mechanism coil | Coin lockout / diverter actuator | yes |
 | 4 | 3 | JL9 | CONTADOR 25 PTS. | 25 pta coin meter | Mechanical audit meter, pulsed on a 25 pta coin | yes |
 | 5 | 4 | JL8 | CONTADOR 100 PTS. | 100 pta coin meter | Mechanical audit meter, pulsed on a 100 pta coin | yes |
@@ -370,6 +373,25 @@ The "used by the ROM" column is not a guess: every write to the coil bit-field i
 an immediate `MVI A,<bit>` and there are exactly eight of them in set 1. Codes 0
 and 5 are never set.
 
+> **Caveat on solenoid 2 — the one thing here the manual contradicts.**
+> What is *measured* is that the ROM gates 4028 output **1** when it awards a
+> replay: award a special and the coil select read off PSG1 port B is output 1,
+> on both ROM sets. Nothing anywhere gates output 0.
+> What is *inferred* is that output 1 is the knocker. The driver schematic
+> (manual page 17 = `manual-images/page-23.jpg`) prints the 4028 output pin
+> number on every row — 3, 14, 2, 15, 1, 6, 7, 4, 9, 5 bottom to top, which is
+> exactly Q0…Q9 — and by those pin numbers **Q0 goes to JL6 TACA and Q1 to JL10
+> N.C.** The JL connector table on the previous sheet
+> (`manual-images/page-22.jpg`) backs up the second half: JL10 has no wire
+> colour against it where every other pin does.
+> Taken literally the machine would never knock, and the one output the program
+> does drive would go nowhere. The driver assumes instead that the sheet's
+> bottom two rows have their JL destinations transposed — the same manual's own
+> *fe de erratas* already corrects two transpositions of exactly this kind
+> (connector JA reversed; IC5 pins 10 and 11 swapped) — and keeps TACA on
+> solenoid 2. **Only a real board settles it.** If you are wiring a table and
+> care, treat solenoid 2 as "replay awarded" rather than as a specific coil.
+
 Two hardware facts worth knowing:
 
 * **Only one coil is sustained at a time.** The firmware emits ten decoder-select
@@ -381,27 +403,44 @@ Two hardware facts worth knowing:
   driver accumulates everything gated since the previous video frame, so expect a
   coil to be reported for whole frames.
 
-### 3.2 Synthesised coils — the bumpers and the ejects
+### 3.2 Synthesised coils — the bumpers and the slingshots
 
-The two pop bumpers and the two eject holes (*expulsores*, the "rampa especial"
-kickouts) are fired on board 53/3311 directly from their own playfield switches,
-through a thyristor block, **with no CPU involvement at all**. The 8085 only ever
-learns that the switch closed.
+Board 53/3311, "CONTROL BUMPER Y EXPULSOR", drives four coils directly from four
+playfield switches through an RC one-shot and a BDX53C, **with no CPU involvement
+at all**. The 8085 only ever learns that the switch closed. Its 15-way connector
+(`manual-images/page-29.jpg`) names them: ENTRADA/SALIDA BUMPER IZQUIERDO on pins
+1/2, BUMPER DERECHO on 4/5, EXPULSOR IZQUIERDO on 6/7 and EXPULSOR DERECHO on
+10/11.
 
-The driver therefore invents four solenoids and pulses each one for six video
-frames on the rising edge of the corresponding column-1 switch:
+**The "expulsores" are the slingshots, not kickout holes.** This playfield has no
+holes. The contact drawing (manual page 3 = `manual-images/page-07.jpg`) puts
+contacts **24 and 25**, both named *10 PUNTOS*, inside the two triangular bodies
+at the bottom corners, and the parts list calls that mechanism the *RECHAZADOR*
+(kicker/slingshot) — the only coil-bearing mechanism in the whole manual that the
+driver board's JL connector does not account for, and there are exactly two of
+them. Contacts 3 and 7, *rampa especial izquierda/derecha*, are plain rollover
+wires in the outer lanes with the ESPECIAL lamps beside them; they drive nothing.
+
+Contacts 24 and 25 are wired in parallel onto AD0, which is switch **11** — the
+ROM's own contact-test table says so, flagging AD0 as a paralleled pair. So the
+CPU sees one contact for two coils and cannot tell left from right.
 
 | # | Fired by switch | Spanish name | English name |
 |---|---|---|---|
 | 17 | 18 (BUMPER IZQUIERDO) | BOBINA BUMPER IZQUIERDO | Left pop bumper coil |
 | 18 | 12 (BUMPER DERECHO) | BOBINA BUMPER DERECHO | Right pop bumper coil |
-| 19 | 14 (RAMPA ESPECIAL IZQUIERDA) | EXPULSOR IZQUIERDO | Left eject/kickout coil |
-| 20 | 16 (RAMPA ESPECIAL DERECHA) | EXPULSOR DERECHO | Right eject/kickout coil |
+| 19 | 11 (10 PUNTOS, contacts 24+25) | EXPULSOR IZQUIERDO | Left slingshot coil |
+| 20 | 11 (10 PUNTOS, contacts 24+25) | EXPULSOR DERECHO | Right slingshot coil |
+
+19 and 20 therefore always fire together. That is not a modelling choice so much
+as a statement about the wiring: there is no information in the machine that
+separates them.
 
 These are useful for sound and lighting, but **do not use them to drive the ball**:
 they are generated *from* your switch, one frame or more after it, so they cannot
-tell you anything you did not already know. Do the bumper and kickout physics in
-the table on the switch hit, and use the callback for the effects.
+tell you anything you did not already know. Do the bumper and slingshot physics in
+the table on the switch hit, and use the callback for the effects — your table
+knows which slingshot the ball hit and the machine does not.
 
 ### 3.3 Flippers
 
@@ -545,9 +584,38 @@ The test covers only the 23 playfield contacts read through `0x4000` and the
 the four contacts wired in parallel with another one — closing either half of a
 pair reports the pair's higher number (see the appendix).
 
-> The `supstarfa` ROM extends this menu to **25 zones** — set 1's nine unchanged
-> plus sixteen more — and reserves an extra `0x30` bytes of NVRAM (its stack base
-> drops from `C7FF` to `C7CF`). The extra sixteen are not documented in the manual.
+### 5.1.1 `supstarfa`'s ten extra zones
+
+The newer firmware extends the menu to **nineteen** zones: set 1's nine
+unchanged, then ten more shown as 10–19. (Its jump table at `0x349D` has 25
+entries, which is where the "25 zones" figure in earlier notes came from, but
+the zone counter at `C01D` is BCD and `0x33DD` steps `0x09 → 0x0A → 0x10`, so
+entries 9–14 are unreachable and are filled with the address of the zone-9
+handler.) It also reserves an extra `0x30` bytes of NVRAM — its stack base drops
+from `C7FF` to `C7CF` — and the new settings live in `C7F1`–`C7FD`.
+
+None of this is in the manual, which describes set 1. Everything below was read
+out of the ROM and then checked on the running machine, either by walking the
+menu (`tools/rfranco_zones.py`) or by changing the setting and measuring what
+the game did differently.
+
+| Zone | NVRAM | Displayed range | Default | What it changes |
+|---|---|---|---|---|
+| 10 | `C7F1` | 0 / 1 | 1 | **Collecting the LEFT special resets the left bank.** With 1, hitting *rampa especial izquierda* (switch 14) while lamp 52 is lit fires BANCADA IZQUIERDA (solenoid 7) and puts lamp 52 out as well as awarding the replay. With 0 the lamp stays lit and the bank is not reset. Set 1 has no equivalent — it behaves like 0. |
+| 11 | `C7F2` | 0 / 1 | 1 | The same for the **RIGHT** special: switch 16, lamp 42, BANCADA DERECHA (solenoid 9). |
+| 12 | `C7F3` | 0 / 1 | 1 | **Collecting the PICABOLAS special resets the avance ladder.** With 1 it drops back to 10 000, the *avance doble/triple* lamps go out and ESPECIAL PICABOLAS is extinguished. With 0 all three survive. |
+| 13 | `C7F4` | 1–9 | 1 | **Maximum extra balls per game.** `C7F7` counts the extra balls awarded; once it reaches this the award is skipped. |
+| 14 | `C7F5` | 30000–90000 | 30000 | **Score for completing a *diana*** (either drop-target bank). Set 1 awards a hard-coded 30 000 from the same instruction. |
+| 15 | `C7F6` | 100–9800 | 1000 | **Score for the 100 PUNTOS lane** (switch 17). BCD × 100. Set 1 pays 100 for the same contact, so this is the most visible difference between the two sets in ordinary play. |
+| 16 | `C7F8` | 10–20 | 15 | **Maximum credits a replay may take the machine to.** Set 1 has this fixed at 20. The knocker still bangs when the credit is refused. The *coin* path has its own separate limit of 10 and does not consult this. |
+| 17 | `C7F9` | 0 / 1 | 1 | **Completing a diana lights the bumpers.** With 1, lamps 41 and 51 come on and each pop bumper then scores 10 000 instead of 1 000. With 0 they are not lit. |
+| 18 | `C7FA` | 0 / 1 | 1 | **Stuck-contact watchdog.** Enables the routine at `0x3ABF` that faults the machine when switch 11, 12, 18 or 47 is held closed for about 128 consecutive game-loop passes, and the matching checks in the fault-recovery path. This is the one that looks like a display fault — see §6.1. Turn it off if a table has a contact it cannot help holding. |
+| 19 | `C7FD` | 0 / 1 | 1 | Gates the call at `0x11E6` in the end-of-ball path that forces the saved avance ladder (`C094`/`C097`) back to its bottom rung. **Only partly settled** — see `hardware-findings.md` §15. |
+
+Two of these change the game as shipped rather than only when an operator moves
+them: zone 15 makes the 100 puntos lane pay 1 000 where set 1 pays 100, and
+zone 17 is on by default, so the bumpers go to 10 000 after the first completed
+diana.
 
 ### 5.2 TEST DE LUCES Y VISUALIZACION DE RAM (DIP = 1)
 
@@ -612,9 +680,13 @@ the instant it starts one. The correct model is a two-state trough:
 * opened when solenoid **10** (SALIDA BOLAS) fires;
 * closed again when the ball drains.
 
-The driver contains exactly that model, driven by the `HOME` key — but **it only
-runs when PinMAME is handling the keyboard, which VPinMAME turns off.** Under VPX
-your table owns switch 27 completely:
+The driver contains exactly that model. Half of it runs under VPX and half does
+not: the driver opens the contact by itself when SALIDA BOLAS fires, because
+that half is driven from the coil rather than from a key, but nothing closes it
+again unless the `HOME` key is available. So under VPX **your table must close
+switch 27 on drain and at power-on**, and may leave the opening to the driver or
+do it itself — the driver only writes the bit on those two events and never
+reasserts it, so whichever of you writes last wins and you will not fight it:
 
 ```vbscript
 Sub Table1_Init
@@ -647,7 +719,42 @@ Sub AddCoin25
 End Sub
 ```
 
-The driver's one-shot for this is, again, keyboard-mode only.
+The driver turns a coin *key* into a one-shot for you, but a table that sets the
+switch directly is on its own — the driver deliberately does not touch a switch
+it is not currently changing (see below), so it will not shorten your pulse for
+you.
+
+**(3) On `supstarfa` only: do not leave switch 11, 12, 18 or 47 closed.**
+
+Set 2 has a stuck-contact watchdog that set 1 does not. A contact held closed for
+about 128 consecutive game-loop passes — measured at ~27 s from a cold NVRAM and
+~7 s once its counters are warm — jumps to the fault handler, which blanks all
+thirty digits to the 7447's pattern for 14. It looks exactly like a display bug
+and is not one: **read `C01C` before suspecting the display; `0xFF` means the ROM
+faulted.** Operator zone 18 turns the watchdog off (§5.1.1).
+
+**(4) A ball that has not scored is not counted.**
+
+Close the trough on a ball that has scored nothing since it was served and the
+game does not advance the ball number — it just serves the same ball again, and
+will keep doing so indefinitely. Score once and the very next drain advances
+normally. Measured: two consecutive drains of an untouched ball left the ball
+number where it was, and a single 10-point contact between the second and third
+made the third advance.
+
+This is the machine's own rule and it is a sensible one — it is what stops a
+ball that never left the shooter lane from being lost — but it will look like a
+broken drain if your table can put the ball back in the trough without touching
+anything.
+
+### 6.1.1 The driver will not fight you for a switch
+
+Worth knowing because the driver used to do the opposite. Nothing in
+`SWITCH_UPDATE` writes a cabinet-row bit unless that bit is changing on the
+driver's own side — a keyboard key moving, or a coin one-shot starting or
+expiring. It does not rebuild the row every frame. So a switch your table sets
+stays set until your table clears it, which is what you want, and which is what
+makes the coin/start sequence work reliably from outside the keyboard.
 
 ### 6.2 The absolute minimum to get a game going
 
@@ -722,7 +829,7 @@ Sub Table1_Init
     Controller.Switch(27) = True        ' ball in the trough: MUST be closed
 End Sub
 
-' bumpers and ejects: solenoids 17-20 are for effects only, do the physics here
+' bumpers and slingshots: solenoids 17-20 are for effects only, do the physics here
 Sub LeftBumper_Hit
     vpmTimer.PulseSw 18                 ' scoring contact
     ' ...and kick the ball with your own mechanics
@@ -745,11 +852,11 @@ Zone 9 reports the manual's numbering. Use this to translate.
 |---|---|
 | 1 PASILLO SUPERIOR IZQUIERDO | 46 |
 | 2 PASILLO SUPERIOR DERECHO | 45 |
-| 3 RAMPA ESPECIAL IZQUIERDA | 14 |
+| 3 RAMPA ESPECIAL IZQUIERDA | 14 (upper left outer lane, a rollover) |
 | 4 BUMPER IZQUIERDO | 18 |
 | 5 PICABOLAS | 47 |
 | 6 BUMPER DERECHO | 12 |
-| 7 RAMPA ESPECIAL DERECHA | 16 |
+| 7 RAMPA ESPECIAL DERECHA | 16 (upper right outer lane, a rollover) |
 | 8 DIANA IZQUIERDA (bank) | 13 |
 | 9 DIANA DERECHA (bank) | 15 |
 | 10 100 PUNTOS | 17 (paralleled with 21; reported as 21) |
@@ -766,8 +873,8 @@ Zone 9 reports the manual's numbering. Use this to translate.
 | 21 100 PUNTOS | 17 (paralleled with 10) |
 | 22 PASILLO INFERIOR IZQUIERDO | 32 (paralleled with 26; reported as 26) |
 | 23 PASILLO INFERIOR DERECHO | 31 (paralleled with 27; reported as 27) |
-| 24 10 PUNTOS | 11 (paralleled with 25; reported as 25) |
-| 25 10 PUNTOS | 11 (paralleled with 24) |
+| 24 10 PUNTOS | 11 (left slingshot; paralleled with 25, reported as 25) |
+| 25 10 PUNTOS | 11 (right slingshot; paralleled with 24) |
 | 26 PASILLO INFERIOR IZQUIERDO | 32 (paralleled with 22) |
 | 27 PASILLO INFERIOR DERECHO | 31 (paralleled with 23) |
 | 28 CAIDA DE BOLA | 27 (not covered by zone 9) |

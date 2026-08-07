@@ -109,12 +109,15 @@ Only one coil is sustained at a time.
 
 ### Coils the CPU never sees
 
-The two pop bumpers and the two ball ejectors are fired on board 53/3311 straight
-from their own playfield contacts, through an RC one-shot into a BDX53C at +48 V.
-The 8085 reads those contacts for scoring and nothing else. The driver synthesises
-solenoids 17–20 from the rising edge of the four `0x4000` bits so a front end has
-something to hang effects on; they are derived from the switch, so they carry no
-information a table did not already have.
+The two pop bumpers and the two slingshots (the manual's *expulsores*, board
+53/3311's own name for the *rechazador* mechanism) are fired on that board
+straight from their own playfield contacts, through an RC one-shot into a BDX53C
+at +48 V. The 8085 reads those contacts for scoring and nothing else. The driver
+synthesises solenoids 17–20 from the rising edge of the `0x4000` bits so a front
+end has something to hang effects on; they are derived from the switch, so they
+carry no information a table did not already have. Both slingshot contacts are
+wired in parallel onto one bus bit, so solenoids 19 and 20 necessarily fire
+together — see §7A.
 
 ---
 
@@ -376,97 +379,134 @@ is 75–80 s of wall clock.
 
 ## 7. Open items and known gaps
 
-Ordered by how much they would matter to a reviewer.
+Ordered by how much they would matter to a reviewer. Several entries that were
+here before are now closed; they are listed at the end with what closed them.
 
-### 7.1 `SWITCH_UPDATE` is dead code under VPinMAME and libpinmame
+### 7.1 Solenoid 2 is what the ROM drives, not necessarily what the coil is
 
-`core_updateSw()` calls `coreData->updSw(g_fHandleKeyboard ? inports : NULL)`, and
-`g_fHandleKeyboard` is 0 in `libpinmame` and `FALSE` by default in the win32com
-`Controller`. The whole body of `SWITCH_UPDATE(RFRANCO)` is inside `if (inports)`,
-so under VPX **none of it runs**. Consequences:
+The ROM gates 4028 output 1 when it awards a replay. That is a measurement, not
+a reading: award a special on a running machine and the coil select taken off
+PSG1 port B is output 1, on both ROM sets. Nothing anywhere gates output 0.
 
-* **Tilt is unreachable.** RST 6.5 is only ever raised from inside that handler,
-  so a VPX table cannot tilt the machine at all.
-* **The two-state trough model does not run.** `locals.ballInTrough` is still
-  cleared when SALIDA BOLAS fires, but nothing ever writes it back into
-  `swMatrix[2]`, so the whole model is inert and the table owns switch 27.
-* **The coin one-shot does not run**, so a table that holds a coin switch closed
-  for more than ~200 ms wedges the machine permanently.
+Whether output 1 is physically the knocker is the open part. The driver
+schematic (manual page 17, `manual-images/page-23.jpg`) prints the 4028 output
+pin number against every row - bottom to top 3, 14, 2, 15, 1, 6, 7, 4, 9, 5,
+which is exactly Q0…Q9 - and by those numbers **Q0 goes to JL6 TACA and Q1 to
+JL10 N.C.** The JL connector table on the previous sheet
+(`manual-images/page-22.jpg`, manual page 16) agrees about JL10: it is the one
+pin on that connector with no wire colour against it.
 
-The last two are the difference between a working table and a dead one. They are
-documented in `vpx-table-reference.md` §6, but they arguably belong outside the
-keyboard path — `hw.handleMech` runs unconditionally and would be a natural home
-for the trough. A pseudo-switch for *falta* would close the tilt gap the same way.
+Read literally, the machine never knocks and the one coil output the program
+drives is not connected. The driver assumes instead that the sheet's bottom two
+rows have their JL destinations transposed. Codes 2-9 all match the ROM exactly,
+the same manual's *fe de erratas* already corrects two transpositions of exactly
+this kind (connector JA reversed, IC5 pins 10 and 11 swapped), and a machine
+whose replay never bangs is not credible. **Only a physical board settles it.**
 
-### 7.2 The sound-ROM descramble is guarded by a process-lifetime static
+### 7.2 The READY guard timeout still has no derivation
 
-```c
-static void rfranco_unscramble_sound_rom(void) {
-  static int done = 0;
-  ...
-  if (done || !rom) return;
-  done = 1;
-```
+See §5. It is now 1000 µs with a comment explaining the bound rather than the
+value, and the transfer no longer loses bytes, but nothing derives it. The
+symptom to watch for is the echo check at `0x198E` failing.
 
-`done` survives for the life of the process, but the ROM region is reloaded every
-time a game is started. In a host that starts and stops games repeatedly in one
-process — which is exactly what VPinMAME and libpinmame do — the **second** start
-gets a freshly loaded, still-scrambled sound ROM and skips the descramble. The
-8035 then executes noise, never releases P2.4, and the main CPU stays in reset
-forever: the machine simply will not boot the second time.
+### 7.3 `MDRV_INTERLEAVE(500)` has not been retested since READY was modelled
 
-Suggested fix: do the descramble in the per-game `DRIVER_INIT` (`init_##name` in
-the `INITGAME` macro), which runs once per game start and after ROM loading, and
-drop the static. It must not go in `MACHINE_INIT`, which also runs on soft reset
-and would re-reverse the image back to nonsense.
+It was raised for the sound handshake before the trigger-based READY model
+existed. It may be able to come down now, which would be worth real time on a
+host CPU, but nothing has tested it.
 
-### 7.3 The lamp map comment documents a numbering the driver does not install
+### 7.4 Smaller things
 
-The driver installs `MDRV_SWITCH_CONV(rfranco_sw2m, rfranco_m2sw)`, giving
-switches `11`–`48`, but **no `MDRV_LAMP_CONV`** — so lamps fall back to the base
-`PinMAME` machine driver's sequential `core_swSeq2m`/`core_m2swSeq` and come out
-as `1`–`64` on `col*8 + row + 1`.
-
-The large lamp-map comment above `rfranco_gate()` describes exactly the same lamps
-on a **10-based** scheme (`1`–`8` for column 0, `11`–`18` for column 1, …
-`71`–`74` for column 7), which is what `rfranco_m2sw` would produce. The two
-disagree from column 1 onwards, so the comment is currently misleading: the
-"11 luz falta" it names is lamp 9 to a VPX table.
-
-Resolve it one way or the other **before any table ships**, because adding a lamp
-conversion later renumbers every lamp. Either add
-`MDRV_LAMP_CONV(rfranco_sw2m, rfranco_m2sw)` so the comment becomes true and the
-two numbering schemes match, or rewrite the comment in sequential numbers and say
-in the header that sequential is deliberate.
-
-### 7.4 The handshake guard timeout
-
-See §5. The value has no derivation and the residual echo mismatches at `0x198E`
-are the most likely symptom. Re-measure with the harness fixed per §6 before
-concluding anything.
-
-### 7.5 Smaller things
-
-* `locals.simSinceClock` is written by `rfranco_sod_w` and never read; it was part
-  of the superseded chain-aliasing fix.
-* `rfranco_scpu_readport` / `rfranco_scpu_writeport` are opened with
-  `PORT_READ_START` / `PORT_WRITE_START` but closed with `MEMORY_END` in one case
-  and `PORT_END` in the other. Harmless, inconsistent.
-* The file header still says "Status: work in progress … Display decoding, lamps
-  and solenoids are not yet mapped - see the TODOs below." All three are now
-  implemented and there are no TODOs left below. It needs rewriting before
-  submission.
-* `MDRV_INTERLEAVE(500)` is aggressive. It was raised for the sound handshake
-  before the READY model existed; worth re-testing whether it can come back down
-  now that the CPUs are properly flow-controlled.
-* `MDRV_DIPS(16)` for two used bits.
-* `core_bcd2seg7[]` only initialises entries 0–9 outside `MAME_DEBUG` builds, so
+* `MDRV_DIPS(16)` declares sixteen DIP bits for two used ones. Harmless -
+  `core_updateSw` reads `(coreDips+31)/16` ports either way - but untidy.
+* `core_bcd2seg7[]` only initialises entries 0-9 outside `MAME_DEBUG` builds, so
   the driver's use of index `0x0F` to blank a digit works by falling into the
-  zero-initialised tail. Correct in both build types (index 15 is zero either way),
-  but in a `MAME_DEBUG` build nibbles `0x0A`–`0x0E` render as letters where a 7447
-  would not.
+  zero-initialised tail. Correct in both build types (index 15 is zero either
+  way), but in a `MAME_DEBUG` build nibbles `0x0A`-`0x0E` render as letters
+  where a 7447 would not.
+* `supstarfa`'s zone 19 (`C7FD`) is understood as far as the instruction it
+  gates but its visible effect has not been isolated. See
+  `hardware-findings.md` §15.
+
+### 7.5 Closed since the last revision of this document
+
+| Was | Now |
+|---|---|
+| `SWITCH_UPDATE` is dead code under VPinMAME, so the trough model, the coin one-shot and tilt never run | All three moved outside `if (inports)`. The trough is driven from events, the coin one-shot is run down from either path, and *falta* is read off switch 21 unconditionally |
+| The sound-ROM descramble is guarded by a process-lifetime static, so a second game start in one process runs a scrambled image | Moved into `DRIVER_INIT`, which runs once per game start after the ROMs load |
+| The lamp-map comment documents a numbering the driver does not install | `MDRV_LAMP_CONV(rfranco_lamp2m, rfranco_m2lamp)` added; lamp numbers are now `col*10 + row + 1`, matching both the comment and the switch numbering |
+| `locals.simSinceClock` written and never read | Removed |
+| `PORT_READ_START` closed with `MEMORY_END` | Closed with `PORT_END` |
+| The file header still says "work in progress … display, lamps and solenoids not yet mapped" | Rewritten; it now says what has been played through and on which sets |
+| The harness instruments `0x0286` with no CPU filter, so its "error path" result is contaminated by the sound ROM | The debugger endpoints take `&cpu=N` and the harness asserts on machine state (`C01C`, credits, lit segments) instead |
 
 ---
+
+## 7A. Two corrections this revision makes to earlier conclusions
+
+Both were stated as settled in earlier notes and were wrong.
+
+### The switch matrix was being overwritten every frame
+
+`SWITCH_UPDATE(RFRANCO)` rebuilt the whole cabinet row from the keyboard input
+port on every vblank:
+
+```c
+if (inp & 0x0080) v |= 0x80;      /* pulsador partidas */
+if (locals.coinPulse) v |= locals.coinBits;
+mask |= 0xb0;                     /* coins and start button */
+...
+if (mask) CORE_SETKEYSW(v, mask, 2);
+```
+
+`CORE_SETKEYSW` writes every bit in the mask, so switches 25, 26 and 28 were
+stamped back to whatever the keyboard said 60 times a second. Anything else that
+set them - a front end, or the debugger's `/api/input` - survived less than one
+frame, and the ROM reads that row through a sound-command round trip rather than
+directly, so whether it ever saw the switch was luck. In practice "insert coin,
+press start" worked about half the time from outside the keyboard, which is
+exactly the kind of flakiness that gets blamed on the emulation.
+
+Fixed by making every write edge-driven: the start bit is only written when the
+key level changes, and the coin bits only when the one-shot's own output
+changes. Nothing writes a bit it is not currently changing, so an external
+writer keeps control of everything in between. This is the same rule the trough
+contact already followed.
+
+### The two ball "ejectors" are the slingshots, and they share one contact
+
+Pseudo-solenoids 19 and 20 were wired to switches 14 and 16, *rampa especial
+izquierda/derecha*, on the reading that "EXPULSOR" on board 53/3311 meant a
+kickout hole. This playfield has no holes. The manual's contact drawing (page 3)
+puts contacts 24 and 25 - both named *10 PUNTOS* - inside the two triangular
+bodies at the bottom corners, and the parts list calls that mechanism the
+*rechazador*, the only coil-bearing mechanism in the manual that the driver
+board's JL connector does not account for. Contacts 3 and 7 are plain rollover
+wires in the outer lanes with the ESPECIAL lamps beside them.
+
+Contacts 24 and 25 are wired in parallel onto AD0 - the ROM's own contact-test
+table flags that bit as a paralleled pair - so both slingshots reach the CPU as
+switch 11 and it cannot tell them apart. Both pseudo-solenoids now fire from
+switch 11, together, because there is no information in the machine that
+separates them.
+
+---
+
+## 7B. The operator door switches are now reachable as switches
+
+The two door switches were only settable through `core_getDip`, which is fine
+for choosing a mode at power-on and useless for anything else: inside the
+AJUSTES menu the ROM re-reads them on every pass and uses them to decide what
+the start button does - both up steps the current zone's *value*, either one
+down steps to the next *zone*. Walking the menu means moving a switch while the
+machine runs, and a DIP setting cannot do that.
+
+The ROM never looks at bits 0-3 of the cabinet byte (every read masks
+`0x10`/`0x20`/`0x40`/`0x80`), which is what already lets the driver borrow bit 0
+for *falta*. Bits 2 and 3 - switches 23 and 24 - now lift the *ajuste* and
+*test* door switches respectively, ANDed into whatever the DIP says, so with
+both open nothing changes. `tools/rfranco_zones.py` uses them to walk the whole
+menu on either set.
 
 ## 8. What is verified, and how
 
@@ -484,6 +524,11 @@ concluding anything.
 | TRAP at 100 Hz | PSU board 53/3309 takes an 11-0-11 V centre-tapped winding into D3/D4 — full-wave, so 100 Hz on 50 Hz mains. This is also the rate the two-phase lamp multiplexing needs |
 | 8035 clock | PinMAME's MCS-48 core has no internal divider, so the machine-cycle rate is what it wants. The sound ROM's tone table corroborates the resulting PSG clock: at 844.8 kHz the entries give A3 = 220.000, A4 = 440.000, A5 = 880.000, A6 = 1760.000 Hz exactly |
 
+| A complete game plays on both sets | `tools/rfranco_game.py --rom all`: coin → credit → start button lamp → start → SALIDA BOLAS → JUGADOR 1 and BOLA 1 lamps → eight playfield contacts each scoring → both drop-target banks lighting their ESPECIAL lamps → collecting one awards a credit and gates the knocker → ball 1/2/3 each ending with its bonus and each being re-served → FIN DE JUEGO → the final score held into attract, with `C01C` still 0 |
+| Solenoid 2 fires on a replay award | Observed rather than inferred: the coil select taken off PSG1 port B reads 4028 output 1 at the same moment the credit appears, on both sets. Which coil is on that output is §7.1 |
+| The two *expulsores* are the slingshots | Manual page 3's contact drawing places contacts 24 and 25 inside the two bottom-corner triangles; the parts list names that mechanism *rechazador*; it is the only coil mechanism the driver board's JL connector does not account for, and there are two of them. The ROM's own contact test independently says 24+25 are paralleled onto AD0 |
+| `supstarfa` has ten extra operator zones, not sixteen | Walked on the machine: the BCD zone counter steps 9 → 10 and stops at 19, so six of the jump table's 25 entries are unreachable. Each new zone's NVRAM byte, range and effect were then established by changing the value and measuring the difference |
+
 Not verified against real hardware: nothing here has been checked on a physical
 machine. Everything is derived from the factory manual, the two ROM images and the
 running emulation.
@@ -494,6 +539,16 @@ running emulation.
 ## Update: harness and sound verification
 
 Superseding the harness description earlier in this document.
+
+There are now four tools, all under `tools/`:
+
+| Tool | What it does |
+|---|---|
+| `rfranco_check.py` | Boots headless, waits for steady state, asserts eight health invariants. Run it after every change |
+| `rfranco_game.py` | Plays a complete game on either set and asserts on lamps, coils and digits at every step |
+| `rfranco_soak.py` | Many games with randomised switch traffic, watching for the fault handler latching, the display sticking, the stack walking or a CPU stopping |
+| `rfranco_zones.py` | Walks the AJUSTES menu and prints every zone with its display and its NVRAM |
+
 
 `tools/rfranco_check.py` now covers **both** ROM sets: `--rom supstarf`,
 `--rom supstarfa` or `--rom all`. It carries a per-set address table (TRAP entry

@@ -48,7 +48,7 @@ Five boards. Everything the CPU touches is serial.
 | Driver | 53/3308 | four CD4028 decoders + BT106 thyristors for lamps and coils, two 74165s for the switch chain |
 | Displays | 53/3307 | 74164 → 8279 → 74159 + two 7447 → 30 × HDSP-3400 |
 | Conexión intermedia | 53/3310 | interconnect; carries the flipper buttons, the knocker, and RL1, the coil-supply relay |
-| Control bumper y expulsor | 53/3311 | fires the two bumpers and two ejects locally, with no CPU involvement |
+| Control bumper y expulsor | 53/3311 | fires the two bumpers and the two slingshots locally, with no CPU involvement |
 
 | Function | Part | Socket |
 |---|---|---|
@@ -285,7 +285,7 @@ The two operator door switches arrive on PSG2 **port B** bits 7/6 (`0x0F`);
 `0xC0` = both down = normal play, which is what the boot dispatch at `0x00BB`
 decodes.
 
-### 4.4 Two rules the firmware imposes
+### 4.4 Three rules the firmware imposes
 
 Both were found the hard way, by a machine that booted, refreshed its display and
 completed its sound handshake while the foreground program was dead.
@@ -298,6 +298,14 @@ completed its sound handshake while the foreground program was dead.
   contact to **open** within 20 TRAP ticks (≈200 ms). If it is still closed it
   falls through to `0x055C` and jumps to the fault handler, which wedges the
   machine permanently.
+* **A ball that has not scored is not counted.** Closing the trough on a ball
+  that has scored nothing since it was served does not advance the ball number;
+  the game serves the same ball again, indefinitely. Measured: two consecutive
+  drains of an untouched ball left the ball number unchanged, and a single
+  10-point contact before the third drain made it advance at once. This is a
+  sensible rule — it is what stops a ball that never left the shooter lane from
+  being lost — but it costs time to rediscover from the outside, and it is why
+  `tools/rfranco_soak.py` scores once before every drain.
 
 ### 4.5 The zone-9 switch-test table, decoded
 
@@ -535,10 +543,27 @@ identify each coil:
 | 8 | 9 | JL1 | BANCADA DERECHA | `0x80` @ `0x1639` | guarded by the right-bank target bits |
 | 9 | 10 | JL4 | SALIDA BOLAS | `0x40` @ `0x1682` | ball release, in the ball-start sequence |
 
-This is the one place the manual's table order does not hold: read strictly
-bottom-up it would put TACA on code 0 and the N.C. on code 1. The ROM writes code
-1 and never code 0, so the last two rows of the manual's IC7 table are in the
-opposite order to the other eight. Codes 2–9 are unaffected.
+**Codes 0 and 1 are the one place the manual and the ROM cannot both be right.**
+Read strictly bottom-up the manual puts TACA on code 0 and the N.C. on code 1 —
+and that reading is not just a row-order guess: the schematic sheet
+(`manual-images/page-23.jpg`) prints the 4028 output pin number against every
+row, bottom to top 3, 14, 2, 15, 1, 6, 7, 4, 9, 5, which is Q0…Q9 exactly. The
+JL connector table on the previous sheet agrees about the other half: JL10 is
+the one pin on that connector with no wire colour listed. So by the manual, TACA
+is on Q0 → JL6 and Q1 → JL10 is unwired.
+
+The ROM gates code **1** on a replay award and never code 0, in both firmware
+revisions. That is now measured rather than read: award a special on a running
+machine and the coil select taken off PSG1 port B is output 1, together with the
+credit. Codes 2–9 all match the manual's assignment exactly, so the disagreement
+is confined to these two rows.
+
+Taken literally the manual says the machine never knocks and the one coil output
+the program drives goes nowhere. The driver assumes instead that the sheet's
+bottom two rows have their JL destinations transposed — the same manual's own
+*fe de erratas* already corrects two transpositions of exactly this kind
+(connector JA reversed, IC5 pins 10 and 11 swapped) — and keeps TACA on code 1.
+**This is an inference. Only a physical board settles it.**
 
 **Code 5 — the `FLIPPER` relay — is never asserted.** The interconnect board
 calls the relay it drives *relé alimentación bobinas* (RL1, 75 Ω, on J2-9), so the
@@ -568,13 +593,31 @@ were requested at once, the lower-numbered one gets the sustained slot.
 
 ### 7.4 The four coils the CPU never sees
 
-The two pop bumpers and the two eject holes are fired on board 53/3311 straight
+The two pop bumpers and the two *expulsores* are fired on board 53/3311 straight
 from their playfield switches: +9 V through a 1N4007 and the switch into a
 timing capacitor, then BDX53C to the coil at +48 V. The CPU only ever learns that
-the switch closed, so there is no coil event to report.
+the switch closed, so there is no coil event to report. The board's 15-way
+connector names all four (`manual-images/page-29.jpg`): ENTRADA/SALIDA BUMPER
+IZQUIERDO on 1/2, BUMPER DERECHO on 4/5, EXPULSOR IZQUIERDO on 6/7, EXPULSOR
+DERECHO on 10/11, with 12/13 at +48 V and the common emitter fused at 1.5 A.
+
+**The *expulsores* are the slingshots, not kickout holes.** This playfield has no
+holes at all. The contact drawing (`manual-images/page-07.jpg`, manual page 3)
+puts contacts **24 and 25**, both named *10 PUNTOS*, inside the two triangular
+bodies at the bottom corners; the parts list calls that mechanism the
+*RECHAZADOR* and it is the only coil-bearing mechanism in the manual that the
+driver board's JL connector does not account for. Contacts **3 and 7**, *rampa
+especial izquierda/derecha*, are plain rollover wires in the upper outer lanes
+with the ESPECIAL lamps (JP10/JP9) beside them, and drive nothing.
+
+Contacts 24 and 25 are wired in parallel onto AD0, which the ROM's own contact
+test states independently by flagging that bit as a paralleled pair (§4.5). So
+one CPU input serves both slingshots and the program cannot tell left from
+right.
 
 The driver synthesises four pseudo-solenoids (17–20) from the rising edges of the
-corresponding `0x4000` bits so that a front end has something to drive. They carry
+corresponding `0x4000` bits so that a front end has something to drive: 17 and 18
+from the two bumper contacts, and **both** 19 and 20 from switch 11. They carry
 no information the switch did not already carry.
 
 ## 8. Operator switches, adjustments and audits
@@ -588,10 +631,25 @@ Two switches on the door, reaching the CPU as PSG2 port B bits 7/6 (`1` = down):
 | ajuste up | BORRADO DE DISPLAY Y CREDITOS |
 | both up | AJUSTES DE TANTEO Y TEST DE CONTACTOS |
 
-The ROM dispatches on them at boot (`0x00BB`) and re-reads them live inside the
-menus. Set 1 has 9 adjustment zones; set 2 has 25 (see `rom-provenance.md` §2).
-The zone contents and the three RAM-visualisation audit zones are tabulated in
-`vpx-table-reference.md` §5.
+The ROM dispatches on them at boot (`0x00BB`) **and re-reads them live inside the
+menus**, which is the part that matters for driving the machine from outside: in
+AJUSTES, both switches still up makes the start button step the current zone's
+*value* and either one put back down makes it step to the next *zone* (set 1
+`0x3380`/`0x33BC`, set 2 `0x3383`/`0x33BF`). A DIP setting cannot be moved while
+the machine runs, so the driver also exposes the two switches on the spare
+cabinet bits — switch 23 lifts *ajuste*, switch 24 lifts *test* — ANDed into the
+DIP value so that both open changes nothing.
+
+Set 1 has 9 adjustment zones; set 2 has **19**, numbered 1–9 and 10–19. Its jump
+table at `0x349D` carries 25 entries, which is where the "25 zones" figure in
+earlier notes came from, but the zone counter at `C01D` is BCD and the step at
+`0x33DD` forces `0x0A` to `0x10`, so table entries 9–14 can never be selected;
+they are filled with the address of the zone-9 handler. Walked on the running
+machine with `tools/rfranco_zones.py`, set 1 reaches zones 1–9 and set 2 reaches
+1–9 and 10–19, and stops.
+
+The zone contents, including all ten of set 2's extra ones, and the three
+RAM-visualisation audit zones are tabulated in `vpx-table-reference.md` §5.
 
 ## 9. The sound section
 
@@ -720,10 +778,17 @@ internal clock rather than the crystal (compare `regama.c`, which passes
 Summarised here; the full comparison and all hashes are in `rom-provenance.md`.
 
 **Set 2 (`9A440461`) is the newer firmware**, despite MAME's parent/clone
-ordering. It extends the operator menu from 9 adjustment zones to 25 (set 1's nine
-unchanged, uniformly relocated, plus sixteen new handlers in what is `0xFF` fill
-in set 1) and reserves an extra `0x30` bytes of NVRAM — its stack base drops from
-`C7FF` to `C7CF`.
+ordering. It extends the operator menu from 9 adjustment zones to **19** (set 1's
+nine unchanged, uniformly relocated by +`0x2D`, plus ten new handlers at
+`0x3971`–`0x3A23` in what is `0xFF` fill in set 1) and reserves an extra `0x30`
+bytes of NVRAM — its stack base drops from `C7FF` to `C7CF`, and the new
+settings live at `C7F1`–`C7FD`.
+
+Two of the new settings change how the game plays out of the box, so the two
+sets do **not** score identically: set 2's 100 PUNTOS lane pays 1000 where set 1
+pays 100 (zone 15, default `0x10`), and its zone 17 is on by default, so
+completing a *diana* lights both bumper lamps and the bumpers go from 1000 to
+10000. Everything else about the two is the same game.
 
 **The manual documents exactly 9 zones, so the manual describes set 1.** Develop
 and validate against set 1.
@@ -857,46 +922,84 @@ takes a *fresh* window, because the window that detects the settle straddles the
 transition and still carries startup counts. `--verbose` prints each window so the
 startup ramp is visible (display calls climb 0 → 3 → 8 → 21 → 143).
 
-Checks: TRAP handler balance across `0x1800` / `0x2437` / `0x189C` / `0x196B`;
-error path at `0x0286` never taken; stack pointer near its reset value; both CPUs
-executing.
+Checks: TRAP handler balance across the four per-set addresses; the fault latch
+`C01C` clear; the display not sitting on the fault fill; stack pointer near its
+reset value; both CPUs executing; a coin accepted; and the credit display showing
+the count. Both sets pass all eight.
 
-> **Known defect in the harness.** It instruments `0x0286` with no `cpu`
-> parameter, and `0x0286` in the sound ROM is `MOV A,R5` inside a live
-> voice-setup routine. The "error path never taken" result is therefore
-> contaminated by the sound CPU and the last recorded failure (~3 hits per 8 s)
-> cannot be trusted. Add `&cpu=0` to that point and re-run. The other four points
-> are all above `0x1000` and are unambiguous.
+The earlier "known defect" note here — that the harness instrumented `0x0286`
+without a CPU filter, and that `0x0286` in the sound ROM is live code — is
+obsolete. The debugger's breakpoint, instrumentation and tracepoint endpoints now
+take `&cpu=N`, and the harness asserts on machine state rather than on PC counts
+wherever it can.
+
+### Three more tools
+
+| Tool | What it does |
+|---|---|
+| `rfranco_game.py` | Plays a complete game on either set — coin, credit, start, ball served, scoring, both drop-target banks, collecting a special, ball 1/2/3 with bonus, game over, final score held — and asserts on lamps, coils and digits at every step |
+| `rfranco_soak.py` | Many games with randomised playfield traffic, checking after every game that the fault handler has not latched, the display is not on the fault fill, the stack has not walked and both CPUs are still running |
+| `rfranco_zones.py` | Walks the AJUSTES menu on either set and prints each zone with its display and the NVRAM behind it. This is what established `supstarfa`'s ten extra zones |
+
+`rfranco_zones.py` is also the reason the driver exposes the two door switches on
+switches 23/24: the menu cannot be walked with a DIP setting, because the ROM
+uses the switch *position at the time of the button press* to choose between
+stepping the zone and stepping the value (§8).
 
 ## 15. Open questions
 
-1. **The READY guard timeout.** 100 µs, with no derivation. If it fires before
-   the 8035 has collected a byte, the main CPU is released early and reads a stale
-   reply, which shows up as the echo check at `0x198E` failing. Re-measure once
-   the harness defect in §14 is fixed.
-2. **PinMAME's 8085 core still has no mask-reveal recheck.** `i8085_set_RST55()`
+What is still genuinely unknown, after the second pass. Items that have been
+closed are listed underneath with what closed them.
+
+1. **Which 4028 output the knocker is actually on.** The ROM gates output 1 on a
+   replay award, measured; the manual's IC7 sheet, read by the output pin
+   numbers printed on it, puts TACA on output 0 and an unwired JL10 on output 1
+   (§7.2). One of the two is wrong and only a physical board decides. The driver
+   follows the ROM.
+2. **The READY guard timeout.** 1000 µs, with a bound argued from the 8035's
+   per-byte cost but not derived. The transfer no longer loses bytes and the
+   echo check at `0x198E` tracks the TRAP count, but the number itself is still
+   chosen rather than computed.
+3. **PinMAME's 8085 core has no mask-reveal recheck.** `i8085_set_RST55()`
    returns early when the interrupt is masked, leaving `IREQ` set but never
-   scheduling it; nothing re-evaluates when a later `SIM` unmasks. The ROM does
-   `SIM #$0E` (unmask RST 5.5) then `EI` / `HALT` at `0x1971`. If the sound CPU's
-   reply lands between the `STA` and the `SIM`, the interrupt is lost and the
-   `HALT` never wakes. Not observed, but structurally possible. Newer MAME
+   scheduling it, and nothing re-evaluates when a later `SIM` unmasks. The ROM
+   does `SIM #$0E` then `EI` / `HALT` at `0x1971`. If the sound CPU's reply lands
+   between the `STA` and the `SIM` the interrupt is lost and the `HALT` never
+   wakes. Not observed in any soak so far, but structurally possible; newer MAME
    re-checks.
-3. **Sound command semantics** beyond the six understood ones (§9.2). Sound ROM
+4. **Sound command semantics** beyond the six understood ones (§9.2). Sound ROM
    coverage is ~42% of the code region.
-4. **The upper 2 KB of the sound ROM** (`0x800`–`0xFFF`) holds only four distinct
+5. **The upper 2 KB of the sound ROM** (`0x800`–`0xFFF`) holds only four distinct
    byte values. Genuine, not a dump artefact; purpose unknown.
-5. **The `FLIPPER` relay (IC7 code 5)** is never energised by the ROM, but the
+6. **The `FLIPPER` relay (IC7 code 5)** is never energised by the ROM, but the
    interconnect board calls the relay it drives *relé alimentación bobinas*. What
    it actually gates is inferred, not established.
-6. **JM7 / JM8** — manual and ROM disagree on which is *diana izquierda 2* and
+7. **JM7 / JM8** — manual and ROM disagree on which is *diana izquierda 2* and
    which is 3 (§4.2). Only resolvable on hardware.
-7. **`supstarfa`'s sixteen extra adjustment zones** are undocumented; the manual
-   describes set 1.
 8. **Connector JA pin numbering.** The errata reverses the whole connector and the
    two boards' sheets number it in opposite directions. Signal names are reliable;
    pin numbers on JA are not.
+9. **`supstarfa` zone 19 (`C7FD`).** The instruction it gates is not in doubt: at
+   `0x11E6`, on the path between balls, it decides whether `0x0F70` runs, and
+   `0x0F70` forces the saved avance ladder at `C094`/`C097` to its bottom rung
+   and sets the `C7FE` flag. What has not been isolated is the visible
+   consequence. `C094`/`C097` is read back at `0x1062` and written into the live
+   ladder at `C226`/`C22C`, which reads as a ball-to-ball carry-over of the
+   avance ladder — but with the setting off and a saved value deliberately
+   different from the live one, the next ball still started at the bottom rung,
+   so `0x1062` is evidently not on the ordinary new-ball path. The likely reading
+   is that this is about the ball being held by the *picabolas* rather than about
+   ball changes; that has not been tested.
 
----
+### Closed since the first pass
+
+| Question | What closed it |
+|---|---|
+| Whether solenoid 2 fires at all, or is only inferred from `0x1754` | Observed. Completing a drop-target bank lights the ESPECIAL lamp; collecting it at the *rampa especial* awards a credit and gates 4028 output 1, on both sets. What remains open is only which coil sits on that output — item 1 above |
+| Which contacts fire the two EXPULSOR coils on 53/3311 | The contact drawing and the parts list: they are the two slingshots (*rechazadores*), contacts 24 and 25, both wired in parallel onto AD0 = switch 11 (§7.4). Not the *rampa especial* lanes |
+| `supstarfa`'s extra adjustment zones | Ten of them, not sixteen; walked on the machine and each one's NVRAM byte, range and effect established (§8, `vpx-table-reference.md` §5.1.1) |
+| Whether set 2 plays a complete game | It does, and so does set 1. `tools/rfranco_game.py` plays coin → credit → start → ball served → scoring → ball 1/2/3 → game over → final score held, and asserts on lamps, coils and digits at each step |
+| Whether the harness's "error path" figure could be trusted | Superseded: the debugger endpoints take `&cpu=N` and the harness asserts on machine state instead |
 
 # Part V — Superseded findings
 

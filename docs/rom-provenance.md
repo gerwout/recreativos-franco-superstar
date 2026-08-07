@@ -41,7 +41,7 @@ later revision.**
 |---|---|---|
 | MAME set | `supstarf` (parent) | `supstarfa` (clone) |
 | chip label | `m31-a-01187` (factory part number) | `27c128` (generic) |
-| operator adjustment zones | **9** | **25** |
+| operator adjustment zones | **9** | **19** (a 25-entry jump table, six of whose entries are unreachable) |
 | bytes used | 12 199 | 13 096 (+897) |
 | stack base | `C7FF` | `C7CF` (0x30 more NVRAM reserved) |
 | NVRAM references in `C7xx` | 1 (the `LXI SP` operand) | 22, across 79 instructions |
@@ -53,8 +53,14 @@ Decisive evidence:
   Set 1 range-checks `CPI $0A` against a 9-entry table at `3490`–`34A1`; set 2
   checks `CPI $1A` against a 25-entry table at `349D`–`34CE`. **Set 2's first nine
   targets are set 1's nine, in the same order, uniformly +0x2D.** Entries 10–15
-  are filler pointing at zone 9's handler; 16–25 are new handlers at `3971`–`3A32`,
+  are filler pointing at zone 9's handler; 16–25 are new handlers at `3971`–`3A23`,
   living in what is `0xFF` fill in set 1.
+
+  Note the table's size overstates the menu. `C01D` is BCD and `33DD` steps it
+  `0x09 → 0x0A → 0x10`, so the six filler entries can never be selected and the
+  menu is **nineteen zones**, shown as 1–9 and 10–19. Walking it on the running
+  machine (`tools/rfranco_zones.py`) confirms it: set 1 reaches 1–9 and set 2
+  reaches 1–9 and 10–19, then wraps.
 * Set 2 adds a remap trampoline at `33DD`: on reaching zone `0x0A` it forces
   `C01D = 0x10`. Extending a menu produces that; stripping one does not.
 * 99.6% of set 1's 4733 instructions align into set 2 as pure insertions
