@@ -1,0 +1,14 @@
+# The PinMAME fork and the MAME reference clone are their own repositories
+pinmame/
+mame/
+
+# Analysis working data - large, and regenerable from the scripts
+ghidra/proj/
+ghidra/venv/
+ghidra/out/
+ghidra/bin/
+manual-images/
+
+# ROM images are not redistributable
+romdumps/
+roms/*.zip
