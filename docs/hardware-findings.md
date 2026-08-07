@@ -1048,3 +1048,83 @@ Superseded wholesale. Display decode, lamp mapping, switch mapping and solenoids
 were all listed as not started; all four are implemented and documented in
 Part II. The `0x4000` placeholder is gone (§16). Sound ROM coverage at ~42%
 remains open and is carried forward as §15.4.
+
+
+---
+
+## Update: harness and sound verification
+
+Superseding the harness description earlier in this document.
+
+`tools/rfranco_check.py` now covers **both** ROM sets: `--rom supstarf`,
+`--rom supstarfa` or `--rom all`. It carries a per-set address table (TRAP entry
+0x1800 / 0x19DA, after-display-call 0x189C / 0x18A0, TRAP exit 0x196B / 0x19D6,
+attract loop 0x03B5 / 0x03D9, credits C08D / C08E, stack base C7FF / C7CF), and
+cross-checks two of those entries against the ROM at run time - the `LXI SP`
+operand at 0x0001 and the TRAP vector at 0x0025 - so the table cannot rot
+silently.
+
+Eight checks, and **both sets pass all eight**: handler balance, fault handler
+not latched, display not sitting on the fault fill, stack near its reset value,
+both CPUs executing, a coin accepted, and the credit display showing the count.
+
+Settling now waits on the credit display before enabling the PC hook, which cut
+the wait from ~80s to **~25s**.
+
+The earlier note about the harness instrumenting 0x0286 without a CPU filter is
+obsolete: the debugger's breakpoint, instrumentation and tracepoint endpoints
+now take an optional `&cpu=N`, and the harness asserts on machine state (C01C,
+credits, lit segments) rather than on PC counts wherever it can.
+
+### Set 2 has a stuck-contact watchdog that set 1 does not
+
+Set 2 was reported as "the display breaks after scoring". It is not a display
+fault and not a driver bug. The 0xE fill is `core_bcd2seg7[0x0E]`, written into
+all sixteen 8279 RAM bytes by the ROM's own falta handler (set 2: 0x028E latches
+C01C, 0x031F calls 0x2A1A; set 1 has the same mechanism at 0x0286 / 0x0317 /
+0x2A11).
+
+The trigger is a watchdog at **0x3ABF**, called from 0x0713, which set 1 does not
+have. It watches switches 11, 12, 18 and 47 with counters at C7E0..C7E7 - inside
+the C7CF..C7FF block that set 1 uses as stack. A contact left closed increments
+its counter until it passes 0x7F, then jumps to the falta handler. Measured:
+holding switch 11 closed on set 2, C7E2 climbed 0B → 21 → 38 → 4E → 64 → 7A and
+faulted at 27 seconds from cold NVRAM (~7s once the counters hold their 0x60
+idle value). Set 1 with the same contact held 16s: nothing.
+
+A pulsed scoring switch was never made to fault: 38 games and 2221 randomised
+pulses per set ended with `falta = 00` and zero hits on the falta entry. The
+display module at 0x2400-0x25FF is common code and both ROMs emit byte-identical
+attract streams, so the 8279 model is not implicated either way.
+
+**Rule for anyone debugging this: read C01C before suspecting the 8279.**
+
+### Sound is verified by listening, not only by register writes
+
+Register capture (`tools/rfranco_sound.py`) decodes the AY programming for each
+command; every note lands within 25 cents of equal temperament, the worst being
+the ROM's own integer-period rounding.
+
+| command | decoded |
+|---|---|
+| 0xE1 coin | C4 262.687 / E4 330.000 / G4 394.030 - a C major triad - bass stepping to C5 |
+| 0xB1 ball start | D4 294.972 Hz, twice |
+| 0xE0 bumper | B5 → C2 falling chromatic cascade, 33 of 35 steps descending |
+
+Confirmed against real audio: rebuilt with `SOUND_WAVEOUT=1`, run on Xvfb with
+`-dsp-plugin waveout`, four WAVs recorded. Ball start autocorrelates to
+**295.4 Hz against 294.972 predicted (+2.5 cents)** with 3rd and 5th harmonics
+dominant - a square wave, as expected. The bumper's pitch track walks the
+predicted cascade. Note headless builds are silent (`video.c:787` returns before
+`sound_stream_update`), so audio needs the waveout build and a real or virtual
+display.
+
+The tone table at 0x308-0x387 is 64 little-endian AY periods, chromatic C2-B6
+plus four an octave up. A4 = period 120 = **exactly 440.000 Hz** at 844800 Hz.
+
+### One ROM bug, faithfully emulated
+
+Sound 0xB1's second and third sub-tunes (0x598, 0x535) are unreachable: the tune
+terminator at 0x28B does `ANL PSW,#F8`, zeroing SP and discarding the
+`CALL 0x585` return. Only the first sub-tune plays, and the capture confirms it.
+Worth checking on hardware before anyone "fixes" it.
