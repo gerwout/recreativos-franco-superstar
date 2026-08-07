@@ -958,9 +958,10 @@ closed are listed underneath with what closed them.
    (§7.2). One of the two is wrong and only a physical board decides. The driver
    follows the ROM.
 2. **The READY guard timeout.** 1000 µs, with a bound argued from the 8035's
-   per-byte cost but not derived. The transfer no longer loses bytes and the
-   echo check at `0x198E` tracks the TRAP count, but the number itself is still
-   chosen rather than computed.
+   per-byte cost but not derived. The transfer no longer loses bytes, but the
+   number itself is still chosen rather than computed. The symptom to watch for
+   if it is ever changed is the echo check at `0x198E` falling behind the TRAP
+   count.
 3. **PinMAME's 8085 core has no mask-reveal recheck.** `i8085_set_RST55()`
    returns early when the interrupt is masked, leaving `IREQ` set but never
    scheduling it, and nothing re-evaluates when a later `SIM` unmasks. The ROM
