@@ -18,11 +18,6 @@ are marked.
 > read **closed** whenever a ball is in the trough, and the coin switches must be
 > **pulsed**, never held.
 
-> **Lamp numbers are not final.** The driver is still under active development
-> and does not yet declare a lamp-number conversion, so it inherits PinMAME's
-> sequential 1–64. Its own source comments describe the same lamps on a 10-based
-> scheme (`1`–`8`, `11`–`18`, … `71`–`74`). Confirm with the driver author before
-> committing a table to the numbers in §2.
 
 ---
 
@@ -31,8 +26,8 @@ are marked.
 | Thing | Count | VPX numbers |
 |---|---|---|
 | Playfield / cabinet switches | 4 hardware bytes, 27 real contacts | `11`–`18`, `21`–`28`, `31`–`38`, `41`–`48` |
-| Tilt (*falta*) | 1 | **not a switch and not reachable from VPX** — see §1.5 |
-| Lamps | 8 matrix columns, 44 that can light | `1`–`64` (see §2) |
+| Tilt (*falta*) | 1 | **not a matrix switch** — an interrupt line, reachable by closing switch 21, see §1.5 |
+| Lamps | 8 matrix columns, 44 that can light | `1`–`8`, `11`–`18`, … `71`–`74` (see §2) |
 | Solenoids, CPU-driven | 8 of 10 decoder outputs actually used | `2`–`5`, `7`–`10` |
 | Solenoids, synthesised by the driver | 4 (bumpers and slingshots) | `17`–`20` |
 | Flippers | 2, not CPU-controlled | buttons `112` / `114` in, solenoids `45`–`48` out |
@@ -42,8 +37,8 @@ are marked.
 Absences that will trip up a table author:
 
 * **No ball-in-play display.** The ball number is shown by playfield lamps
-  *BOLA 1*…*BOLA 5* (lamps 25–29).
-* **No match, no game-over reel.** *FINAL PARTIDA* is a lamp (30).
+  *BOLA 1*…*BOLA 5* (lamps 31–35).
+* **No match, no game-over reel.** *FIN DE JUEGO* is a lamp (36).
 * **No flipper switches and no CPU flipper control.** The flipper buttons feed
   the coils directly through the interconnect board.
 * **No coin-door slam switch and no ball-shooter switch.**
@@ -166,6 +161,14 @@ except for one instruction per TRAP pass, so a pulse shorter than a frame is
 armed and gone again before the CPU can look. Hold it for as long as your
 pendulum is swinging.
 
+Measured, from attract on set 1: closing switch 21 latched `C01C` to `0xFF`, lit
+**lamp 11** (*luz falta*, which is the errata's IC1 pin 3 on FASE B) and filled
+all thirty digits with the 7447's pattern for 14; opening it cleared `C01C` and
+the machine went back to waiting for a ball in the trough with the falta lamp
+still lit. That is what a tilt looks like — and it is also what the fault
+handler looks like from any other cause, which is why §6.1 says to read `C01C`
+before suspecting the display.
+
 ### 1.6 Operator door switches — DIP 1 and 2
 
 The two door switches (*interruptor de ajuste*, *interruptor de test*) are not
@@ -199,20 +202,23 @@ The driver gives each (decoder, phase) pair a matrix column of its own:
 | Col | Decoder | Phase | Decoder codes | Connector | VPX lamps |
 |---|---|---|---|---|---|
 | 0 | IC1 | FASE A | 0–7 | JA → display board | 1–8 |
-| 1 | IC1 | FASE B | 0–7 | JA → display board | 9–16 |
-| 2 | IC2 | FASE A | 0–7 | JQ odd pins | 17–24 |
-| 3 | IC2 | FASE B | 0–7 | JQ even pins | 25–32 |
-| 4 | IC3 | FASE A | 0–7 | JP odd pins | 33–40 |
-| 5 | IC3 | FASE B | 0–7 | JP even pins | 41–48 |
-| 6 | IC1 and IC2 | both | 8–9 | JQ | 49–56 |
-| 7 | IC3 | both | 8–9 | — | 57–64 |
+| 1 | IC1 | FASE B | 0–7 | JA → display board | 11–18 |
+| 2 | IC2 | FASE A | 0–7 | JQ odd pins | 21–28 |
+| 3 | IC2 | FASE B | 0–7 | JQ even pins | 31–38 |
+| 4 | IC3 | FASE A | 0–7 | JP odd pins | 41–48 |
+| 5 | IC3 | FASE B | 0–7 | JP even pins | 51–58 |
+| 6 | IC1 and IC2 | both | 8–9 | JQ | 61–68 |
+| 7 | IC3 | both | 8–9 | — | 71–74 |
 
 Within columns 0–5, **bit *n* is decoder code *n***, so the lamp number is
-`col*8 + code + 1`.
+`col*10 + code + 1`.
 
-**Lamp numbers.** The driver installs no lamp conversion of its own, so it
-inherits the base PinMAME machine driver's sequential scheme — see the warning at
-the top of this document.
+**Lamp numbers.** The driver installs `MDRV_LAMP_CONV(rfranco_lamp2m,
+rfranco_m2lamp)`, so lamps are numbered `column*10 + row + 1` — the same scheme
+as the switches, and the same numbers the debug interface reports. Spot-checked
+on the running machine: lamp 11 is *luz falta*, 12 *jugador 1º*, 21 *avance
+10000*, 31 *bola 1ª*, 36 *fin de juego*, 45 *pulsador partidas* and 52 *especial
+izquierda*, each lighting exactly when it should.
 
 The game does its own flashing (it keeps separate "force on" and "force off"
 overlay tables and merges them on alternate frames), so a table should follow the
@@ -231,93 +237,93 @@ lamp state and not add blink logic.
 | 7 | 6 | JA12 | LOTERIA 60 | Lottery 60 |
 | 8 | 7 | JA13 | LOTERIA 50 | Lottery 50 |
 
-### 2.2 Column 1 — IC1, FASE B (lamps 9–16): backbox
+### 2.2 Column 1 — IC1, FASE B (lamps 11–18): backbox
 
 | Lamp | Code | Pin | Spanish name | English name |
 |---|---|---|---|---|
-| **9** | 0 | JA8 | LUZ FALTA | **Tilt — this is the one that lights** |
-| 10 | 1 | JA20/21 | JUGADOR 1º | Player 1 up |
-| 11 | 2 | JA7 | JUGADOR 2º | Player 2 up |
-| 12 | 3 | JA9 | LOTERIA 00 | Lottery 00 |
-| 13 | 4 | JA10 | LOTERIA 10 | Lottery 10 |
-| 14 | 5 | JA11 | LOTERIA 20 | Lottery 20 |
-| 15 | 6 | JA12 | LOTERIA 30 | Lottery 30 |
-| 16 | 7 | JA13 | LOTERIA 40 | Lottery 40 |
+| **11** | 0 | JA8 | LUZ FALTA | **Tilt — this is the one that lights** |
+| 12 | 1 | JA20/21 | JUGADOR 1º | Player 1 up |
+| 13 | 2 | JA7 | JUGADOR 2º | Player 2 up |
+| 14 | 3 | JA9 | LOTERIA 00 | Lottery 00 |
+| 15 | 4 | JA10 | LOTERIA 10 | Lottery 10 |
+| 16 | 5 | JA11 | LOTERIA 20 | Lottery 20 |
+| 17 | 6 | JA12 | LOTERIA 30 | Lottery 30 |
+| 18 | 7 | JA13 | LOTERIA 40 | Lottery 40 |
 
 The *lotería* lamps are the 0…90 lottery wheel in the backbox. Each JA pin carries
 two bulbs, one per phase: `JA9` = 00/90, `JA10` = 10/80, `JA11` = 20/70,
 `JA12` = 30/60, `JA13` = 40/50. (The manual's parts list is missing part
 `01-2339 Pantallas Luces Loteria`, flagged in its own errata.)
 
-### 2.3 Column 2 — IC2, FASE A (lamps 17–24): the *avance* ladder
+### 2.3 Column 2 — IC2, FASE A (lamps 21–28): the *avance* ladder
 
 | Lamp | Code | Pin | Spanish name | English name | Manual luz # |
 |---|---|---|---|---|---|
-| 17 | 0 | JQ11 | LUZ 10000 PUNTOS | Advance 10,000 | 19 |
-| 18 | 1 | JQ19 | LUZ 20000 PUNTOS | Advance 20,000 | 18 |
-| 19 | 2 | JQ13 | LUZ 30000 PUNTOS | Advance 30,000 | 17 |
-| 20 | 3 | JQ17 | LUZ 40000 PUNTOS | Advance 40,000 | 16 |
-| 21 | 4 | JQ15 | LUZ 50000 PUNTOS | Advance 50,000 | 15 |
-| 22 | 5 | JQ5 | LUZ 60000 PUNTOS | Advance 60,000 | 14 |
-| 23 | 6 | JQ3 | LUZ 70000 PUNTOS | Advance 70,000 | 13 |
-| 24 | 7 | JQ9 | LUZ 80000 PUNTOS | Advance 80,000 | 12 |
+| 21 | 0 | JQ11 | LUZ 10000 PUNTOS | Advance 10,000 | 19 |
+| 22 | 1 | JQ19 | LUZ 20000 PUNTOS | Advance 20,000 | 18 |
+| 23 | 2 | JQ13 | LUZ 30000 PUNTOS | Advance 30,000 | 17 |
+| 24 | 3 | JQ17 | LUZ 40000 PUNTOS | Advance 40,000 | 16 |
+| 25 | 4 | JQ15 | LUZ 50000 PUNTOS | Advance 50,000 | 15 |
+| 26 | 5 | JQ5 | LUZ 60000 PUNTOS | Advance 60,000 | 14 |
+| 27 | 6 | JQ3 | LUZ 70000 PUNTOS | Advance 70,000 | 13 |
+| 28 | 7 | JQ9 | LUZ 80000 PUNTOS | Advance 80,000 | 12 |
 
-The 90,000 and 100,000 rungs are on codes 8 and 9 — lamps 53 and 54, §2.7.
+The 90,000 and 100,000 rungs are on codes 8 and 9 — lamps 65 and 66, §2.7.
 
-### 2.4 Column 3 — IC2, FASE B (lamps 25–32)
-
-| Lamp | Code | Pin | Spanish name | English name | Manual luz # |
-|---|---|---|---|---|---|
-| 25 | 0 | JQ12 | LUZ BOLA 1ª | Ball 1 | 27 |
-| 26 | 1 | JQ20 | LUZ BOLA 2ª | Ball 2 | 28 |
-| 27 | 2 | JQ14 | LUZ BOLA 3ª | Ball 3 | 29 |
-| 28 | 3 | JQ18 | LUZ BOLA 4ª | Ball 4 | 30 |
-| 29 | 4 | JQ16 | LUZ BOLA 5ª | Ball 5 | 31 |
-| 30 | 5 | JQ6 | LUZ FINAL PARTIDA | Game over | 32 |
-| 31 | 6 | JQ4 | LUZ BOLA EXTRA (CONSEGUIDA) | Extra ball earned | 26 |
-| 32 | 7 | JQ10 | LUZ ESPECIAL PICABOLAS | Spinner special | 3 |
-
-**Lamps 25–29 are the only ball-in-play indication the machine has.**
-
-### 2.5 Column 4 — IC3, FASE A (lamps 33–40)
+### 2.4 Column 3 — IC2, FASE B (lamps 31–38)
 
 | Lamp | Code | Pin | Spanish name | English name | Manual luz # |
 |---|---|---|---|---|---|
-| 33 | 0 | JP1 | BUMPER DERECHO | Right bumper | 5 |
-| 34 | 1 | JP9 | ESPECIAL DERECHA | Right special | 9 |
-| 35 | 2 | JP3 | BOLA EXTRA DIANA DERECHA | Extra ball, right target bank | 8 |
-| 36 | 3 | JP7 | PASILLO DERECHO INF. Y SUPERIOR | Right lanes | 2, 23, 25 — **three bulbs on one output** |
-| 37 | 4 | JP5 | PULSADOR PARTIDAS | Start-button lamp | 33 |
-| 38–40 | 5–7 | — | — | *(decoder codes 5–7 unwired)* | — |
+| 31 | 0 | JQ12 | LUZ BOLA 1ª | Ball 1 | 27 |
+| 32 | 1 | JQ20 | LUZ BOLA 2ª | Ball 2 | 28 |
+| 33 | 2 | JQ14 | LUZ BOLA 3ª | Ball 3 | 29 |
+| 34 | 3 | JQ18 | LUZ BOLA 4ª | Ball 4 | 30 |
+| 35 | 4 | JQ16 | LUZ BOLA 5ª | Ball 5 | 31 |
+| 36 | 5 | JQ6 | LUZ FINAL PARTIDA | Game over | 32 |
+| 37 | 6 | JQ4 | LUZ BOLA EXTRA (CONSEGUIDA) | Extra ball earned | 26 |
+| 38 | 7 | JQ10 | LUZ ESPECIAL PICABOLAS | Spinner special | 3 |
 
-### 2.6 Column 5 — IC3, FASE B (lamps 41–48)
+**Lamps 31–35 are the only ball-in-play indication the machine has.**
+
+### 2.5 Column 4 — IC3, FASE A (lamps 41–48)
 
 | Lamp | Code | Pin | Spanish name | English name | Manual luz # |
 |---|---|---|---|---|---|
-| 41 | 0 | JP2 | BUMPER IZQUIERDO | Left bumper | 4 |
-| 42 | 1 | JP10 | ESPECIAL IZQUIERDA | Left special | 6 |
-| 43 | 2 | JP4 | BOLA EXTRA DIANA IZQUIERDA | Extra ball, left target bank | 7 |
-| 44 | 3 | JP8 | PASILLO IZQUIERDO INF. Y SUPERIOR | Left lanes | 1, 22, 24 — **three bulbs on one output** |
-| 45 | 4 | JP6 | — | *(N.C. on the connector)* | — |
-| 46–48 | 5–7 | — | — | *(unwired)* | — |
+| 41 | 0 | JP1 | BUMPER DERECHO | Right bumper | 5 |
+| 42 | 1 | JP9 | ESPECIAL DERECHA | Right special | 9 |
+| 43 | 2 | JP3 | BOLA EXTRA DIANA DERECHA | Extra ball, right target bank | 8 |
+| 44 | 3 | JP7 | PASILLO DERECHO INF. Y SUPERIOR | Right lanes | 2, 23, 25 — **three bulbs on one output** |
+| 45 | 4 | JP5 | PULSADOR PARTIDAS | Start-button lamp | 33 |
+| 46–48 | 5–7 | — | — | *(decoder codes 5–7 unwired)* | — |
 
-### 2.7 Column 6 — decoder codes 8 and 9 for IC1 and IC2 (lamps 49–56)
+### 2.6 Column 5 — IC3, FASE B (lamps 51–58)
+
+| Lamp | Code | Pin | Spanish name | English name | Manual luz # |
+|---|---|---|---|---|---|
+| 51 | 0 | JP2 | BUMPER IZQUIERDO | Left bumper | 4 |
+| 52 | 1 | JP10 | ESPECIAL IZQUIERDA | Left special | 6 |
+| 53 | 2 | JP4 | BOLA EXTRA DIANA IZQUIERDA | Extra ball, left target bank | 7 |
+| 54 | 3 | JP8 | PASILLO IZQUIERDO INF. Y SUPERIOR | Left lanes | 1, 22, 24 — **three bulbs on one output** |
+| 55 | 4 | JP6 | — | *(N.C. on the connector)* | — |
+| 56–58 | 5–7 | — | — | *(unwired)* | — |
+
+### 2.7 Column 6 — decoder codes 8 and 9 for IC1 and IC2 (lamps 61–68)
 
 | Lamp | Decoder | Phase | Code | Pin | Spanish name | English name | Manual luz # |
 |---|---|---|---|---|---|---|---|
-| 49–52 | IC1 | A, A, B, B | 8, 9, 8, 9 | — | — | *(N.U. on the schematic — never light)* | — |
-| 53 | IC2 | A | 8 | JQ1 | LUZ 90000 PUNTOS | Advance 90,000 | 11 |
-| 54 | IC2 | A | 9 | JQ7 | LUZ 100000 PUNTOS | Advance 100,000 | 10 |
-| 55 | IC2 | B | 8 | JQ2 | LUZ AVANZE DOBLE | Double advance | 20 |
-| 56 | IC2 | B | 9 | JQ8 | LUZ AVANZE TRIPLE | Triple advance | 21 |
+| 61–64 | IC1 | A, A, B, B | 8, 9, 8, 9 | — | — | *(N.U. on the schematic — never light)* | — |
+| 65 | IC2 | A | 8 | JQ1 | LUZ 90000 PUNTOS | Advance 90,000 | 11 |
+| 66 | IC2 | A | 9 | JQ7 | LUZ 100000 PUNTOS | Advance 100,000 | 10 |
+| 67 | IC2 | B | 8 | JQ2 | LUZ AVANZE DOBLE | Double advance | 20 |
+| 68 | IC2 | B | 9 | JQ8 | LUZ AVANZE TRIPLE | Triple advance | 21 |
 
 *Double* lights when one target bank is completed while the other still has
 targets standing; *triple* when both banks are down.
 
-### 2.8 Column 7 — decoder codes 8 and 9 for IC3 (lamps 57–64)
+### 2.8 Column 7 — decoder codes 8 and 9 for IC3 (lamps 71–74)
 
-Nothing is wired to IC3's codes 8 and 9, so lamps 57–60 never light and 61–64 do
-not exist. The column is present only to keep the layout regular.
+Nothing is wired to IC3's codes 8 and 9, so lamps 71–74 never light. The column
+is present only to keep the layout regular.
 
 ### 2.9 The tilt lamp
 
@@ -328,7 +334,8 @@ copy of the IC1 table (`C21C`), and the FASE A copy (`C219`) is repeatedly maske
 with `ANI 0x1F`, which clears code 0 unconditionally. The power-fail handler at
 `0x0244` lights it the same way.
 
-**Bind lamp 9. Lamp 1 will never light.**
+**Bind lamp 11. Lamp 1 will never light.** Confirmed on the machine: closing
+switch 21 lights lamp 11 and nothing else in column 0 — see §1.5.
 
 ### 2.10 Coverage check against the manual
 
@@ -770,11 +777,14 @@ Also:
 
 * **Leave switch 48 open.** It is a floating shift-register input; setting it
   makes the zone-9 contact test report a phantom contact.
-* Switches 21–24 do nothing at all — the ROM never reads them.
-* **Do not look for a ball-in-play display** — use lamps 25–29 (*BOLA 1*–*BOLA 5*).
-* **The knocker is solenoid 2**, fired on every *especial*.
+* The ROM never reads switches 21–24, which is why the driver borrows three of
+  them: 21 is *falta* (§1.5), 23 and 24 are the operator door switches (§5.1).
+  22 does nothing.
+* **Do not look for a ball-in-play display** — use lamps 31–35 (*BOLA 1*–*BOLA 5*).
+* **Solenoid 2 fires on every *especial*.** Whether the coil on it is the
+  knocker is the one thing the manual and the ROM disagree about — §3.1.
 * Solenoid 1 and solenoid 6 never fire. That is correct, not a bug.
-* **Bind lamp 9 for tilt, not lamp 1** (§2.9).
+* **Bind lamp 11 for tilt, not lamp 1** (§2.9).
 
 ### 6.3 First boot: the NVRAM starts zeroed
 
@@ -805,7 +815,7 @@ with the table is the friendliest option.
 
 ```vbscript
 ' ---- solenoids -------------------------------------------------
-SolCallback(2)  = "SolKnocker"          ' TACA - especial awarded
+SolCallback(2)  = "SolKnocker"          ' especial awarded - see 3.1
 SolCallback(3)  = "SolCoinLockout"
 SolCallback(4)  = "SolCoinMeter25"
 SolCallback(5)  = "SolCoinMeter100"
@@ -815,8 +825,8 @@ SolCallback(9)  = "SolResetRightBank"   ' BANCADA DERECHA
 SolCallback(10) = "SolBallRelease"      ' SALIDA BOLAS - also opens switch 27
 SolCallback(17) = "SndLeftBumper"       ' synthesised from switch 18
 SolCallback(18) = "SndRightBumper"      ' synthesised from switch 12
-SolCallback(19) = "SndLeftEject"        ' synthesised from switch 14
-SolCallback(20) = "SndRightEject"       ' synthesised from switch 16
+SolCallback(19) = "SndLeftSling"        ' synthesised from switch 11 ...
+SolCallback(20) = "SndRightSling"       ' ... and so is this one: same contact
 SolCallback(45) = "SolRFlipper"         ' synthesised by the PinMAME core
 SolCallback(47) = "SolLFlipper"
 ' 1 and 6 are never asserted - do not bind them
@@ -828,6 +838,10 @@ SolCallback(47) = "SolLFlipper"
 Sub Table1_Init
     Controller.Switch(27) = True        ' ball in the trough: MUST be closed
 End Sub
+
+' tilt: hold switch 21 closed for as long as the pendulum is swinging
+Sub Tilt_Hit  : Controller.Switch(21) = True  : End Sub
+Sub Tilt_UnHit: Controller.Switch(21) = False : End Sub
 
 ' bumpers and slingshots: solenoids 17-20 are for effects only, do the physics here
 Sub LeftBumper_Hit

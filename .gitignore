@@ -12,3 +12,4 @@ manual-images/
 # ROM images are not redistributable
 romdumps/
 roms/*.zip
+__pycache__/
