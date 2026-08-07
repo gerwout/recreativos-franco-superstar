@@ -609,9 +609,9 @@ the game did differently.
 | Zone | NVRAM | Displayed range | Default | What it changes |
 |---|---|---|---|---|
 | 10 | `C7F1` | 0 / 1 | 1 | **Collecting the LEFT special resets the left bank.** With 1, hitting *rampa especial izquierda* (switch 14) while lamp 52 is lit fires BANCADA IZQUIERDA (solenoid 7) and puts lamp 52 out as well as awarding the replay. With 0 the lamp stays lit and the bank is not reset. Set 1 has no equivalent — it behaves like 0. |
-| 11 | `C7F2` | 0 / 1 | 1 | The same for the **RIGHT** special: switch 16, lamp 42, BANCADA DERECHA (solenoid 9). |
+| 11 | `C7F2` | 0 / 1 | 1 | The same for the **RIGHT** special: switch 16, lamp 42, BANCADA DERECHA (solenoid 9). Measured both ways — with 1 the bank reset fires and lamp 42 goes out, with 0 only the knocker and the credit. |
 | 12 | `C7F3` | 0 / 1 | 1 | **Collecting the PICABOLAS special resets the avance ladder.** With 1 it drops back to 10 000, the *avance doble/triple* lamps go out and ESPECIAL PICABOLAS is extinguished. With 0 all three survive. |
-| 13 | `C7F4` | 1–9 | 1 | **Maximum extra balls per game.** `C7F7` counts the extra balls awarded; once it reaches this the award is skipped. |
+| 13 | `C7F4` | 1–9 | 1 | **Maximum extra balls per game**, from the ROM: `0x0CBC` compares `C7F4 - 1` against `C7F7`, the count already awarded this game, and abandons the award when the count is higher. *Not confirmed behaviourally* — the same path is also gated on a free-running counter at `C006`, so whether any single completed *diana* arms the BOLA EXTRA lamp is a coin toss and repeated trials did not separate the two effects. |
 | 14 | `C7F5` | 30000–90000 | 30000 | **Score for completing a *diana*** (either drop-target bank). Set 1 awards a hard-coded 30 000 from the same instruction. |
 | 15 | `C7F6` | 100–9800 | 1000 | **Score for the 100 PUNTOS lane** (switch 17). BCD × 100. Set 1 pays 100 for the same contact, so this is the most visible difference between the two sets in ordinary play. |
 | 16 | `C7F8` | 10–20 | 15 | **Maximum credits a replay may take the machine to.** Set 1 has this fixed at 20. The knocker still bangs when the credit is refused. The *coin* path has its own separate limit of 10 and does not consult this. |

@@ -980,7 +980,14 @@ closed are listed underneath with what closed them.
 8. **Connector JA pin numbering.** The errata reverses the whole connector and the
    two boards' sheets number it in opposite directions. Signal names are reliable;
    pin numbers on JA are not.
-9. **`supstarfa` zone 19 (`C7FD`).** The instruction it gates is not in doubt: at
+9. **`supstarfa` zone 13 (`C7F4`), behaviourally.** The ROM is clear enough —
+   `0x0CBC` compares `C7F4 - 1` against `C7F7`, the extra balls already awarded
+   this game, and abandons the award when the count is higher — but the same
+   path is gated a few instructions later on a free-running counter at `C006`,
+   so whether any one completed *diana* arms the BOLA EXTRA lamp is a coin toss.
+   Repeated trials at each setting did not separate the limit from that, so the
+   reading stands on the disassembly alone.
+10. **`supstarfa` zone 19 (`C7FD`).** The instruction it gates is not in doubt: at
    `0x11E6`, on the path between balls, it decides whether `0x0F70` runs, and
    `0x0F70` forces the saved avance ladder at `C094`/`C097` to its bottom rung
    and sets the `C7FE` flag. What has not been isolated is the visible
