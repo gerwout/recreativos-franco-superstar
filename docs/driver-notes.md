@@ -508,6 +508,53 @@ for *falta*. Bits 2 and 3 - switches 23 and 24 - now lift the *ajuste* and
 both open nothing changes. `tools/rfranco_zones.py` uses them to walk the whole
 menu on either set.
 
+## 7C. The driver had no reset handler, so a soft reset did almost nothing
+
+The driver declared `MDRV_CORE_INIT_RESET_STOP(RFRANCO, NULL, NULL)` and put all
+of its power-on state — the `memset` of `locals`, `ballInTrough = 1`,
+`troughEdge = 1`, the SID/SOD callback installs — in the **init** hook. That is
+the wrong hook. `core.c` calls them from two different places:
+
+```c
+2435:  if (!coreData) {                             // first time only
+2609:    if (coreData->init) coreData->init();      //   <- init lives in here
+         ...
+       }
+2629:  if (coreData->reset) coreData->reset();      // every reset, including F3
+```
+
+So `MACHINE_INIT(RFRANCO)` ran once per game start and never again. A soft reset
+— `F3`, or *Reset Game* in the Tab menu — reset both CPUs and left every byte of
+`locals` exactly as the running machine had left it: the 8279 display RAM, the
+8212 latch state, `scpuP2`, the shift-chain position, the coin and start edge
+detectors, and most damagingly the two-state trough model.
+
+The visible symptom was that resetting into an operator mode did nothing at all.
+With the trough model stale, `caída de bolas` was not re-seeded closed, and §4.4
+of `hardware-findings.md` already records what that does to this ROM: `0x030F`
+and `0x0331` ping-pong for ever and the foreground program never completes its
+startup. The boot dispatch at `0x00BB` — the only place in the whole program
+where the operator door switches are read — was therefore never reached, so no
+combination of door switches or DIP setting could take a *running* machine into a
+menu. It looked like a ROM property ("the mode is chosen at power-on and a reset
+does not redo it") and it was not; it was this.
+
+Fixed by making it a `MACHINE_RESET(RFRANCO)` and declaring
+`MDRV_CORE_INIT_RESET_STOP(NULL, RFRANCO, NULL)`, which is what the comparable
+drivers do — `idsa.c` (also Spanish, also 8085-era), `mac.c`, `jeutel.c`. Nothing
+in the handler is once-only, so there is no init hook left to keep. `coreData->reset()`
+also runs on the first pass, so cold boot behaviour is unchanged.
+
+Measured, on `supstarf` with the DIP at its default (*juego*):
+
+| | Before | After |
+|---|---|---|
+| Cold boot, switches 23/24 open | normal play | normal play |
+| Close switches 23/24, press `F3` | still normal play after 300 s | **AJUSTES zone 1 within 10 s** |
+| Trough bit (row 2, `0x40`) after `F3` | left as the last game left it | re-seeded closed |
+
+Both ROM sets still pass `tools/rfranco_check.py` and `tools/rfranco_game.py`.
+
 ## 8. What is verified, and how
 
 | Claim | Evidence |

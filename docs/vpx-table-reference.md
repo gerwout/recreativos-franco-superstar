@@ -909,4 +909,7 @@ appear in the test on their own.
 * `driver-notes.md` — for PinMAME reviewers: architecture, the 8085 core fixes,
   known driver gaps.
 * `hardware-findings.md` — the full hardware analysis and its audit trail.
+* `pinmame-keyboard-reference.md` — the same switches from the other end: which
+  key closes which contact in standalone PinMAME, and how to reach the ROM's own
+  zone 9 contact test.
 * `rom-provenance.md` — ROM sets, hashes, and the `supstarfa` BAD_DUMP case.

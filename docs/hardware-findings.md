@@ -15,6 +15,7 @@ the disagreement is called out.
 | Document | For |
 |---|---|
 | `vpx-table-reference.md` | Visual Pinball table authors — the switch, lamp, solenoid and display tables |
+| `pinmame-keyboard-reference.md` | Driving the machine by hand in standalone PinMAME — which key closes which switch |
 | `driver-notes.md` | PinMAME reviewers — architecture summary, the 8085 core fixes, open items |
 | `rom-provenance.md` | ROM sets, hashes, revision order, the MAME `BAD_DUMP` case |
 
