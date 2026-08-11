@@ -17,6 +17,7 @@ the disagreement is called out.
 | `vpx-table-reference.md` | Visual Pinball table authors — the switch, lamp, solenoid and display tables |
 | `pinmame-keyboard-reference.md` | Driving the machine by hand in standalone PinMAME — which key closes which switch |
 | `driver-notes.md` | PinMAME reviewers — architecture summary, the 8085 core fixes, open items |
+| `game-rom-map.md` | The 27128 game ROM byte by byte: every address classified in both sets, the sound-command census, the driver-gap judgement |
 | `sound-rom-map.md` | The 2532 sound ROM byte by byte: every address classified, all 256 commands mapped, the tune format and catalogue |
 | `questions-for-a-real-machine.md` | The handful of things only a physical board can settle, written for whoever is standing at one |
 | `rom-provenance.md` | ROM sets, hashes, revision order, the MAME `BAD_DUMP` case |
@@ -860,7 +861,10 @@ The features this ROM depends on, and where:
 | `0x2424` | `0x40`/`0xC0` | SOE=1 | drive SOD (display data) |
 | `0x242A` | `D` | SOE=1 | final SOD level |
 
-`RIM` sites: `0x1801` (TRAP entry), `0x18A8` (switch shift-in, SID), `0x34B1`.
+`RIM` sites: `0x1801` (TRAP entry) and `0x18A8` (switch shift-in, SID). An
+earlier Ghidra pass also listed `0x34B1`, but that byte is the *contact 20*
+entry of the switch-test table at `0x34A2`–`0x34B9` — data, not code
+(`game-rom-map.md` §8.1).
 
 ## 11. The 8212 READY handshake
 

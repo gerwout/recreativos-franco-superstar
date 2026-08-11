@@ -148,6 +148,21 @@ which is why it is worth thirty seconds to check.
 
 **A phone video of a ball being served answers this directly.**
 
+**Answered — confirmed on hardware.** The phone recording in `video/` shows a
+game starting at t ≈ 2.0–2.25 s (score displays reset, credits 9 → 8), and the
+machine plays exactly the single two-note phrase: D4 measured at 294.80 and
+295.53 Hz (predicted 294.972 — within 4 cents), square-wave odd harmonics
+through the 13th, onsets 220 ms apart, then no tonal content above the noise
+floor for over a second. In particular the E4 330 Hz band, where sub-tune 2
+would begin at the same volume, stays ≥ 16 dB below the played notes' level,
+and the chord bands (660 / 996 / 1650 Hz) never leave the floor — while the
+same recording proves it *can* capture the would-be third phrase, since the
+D4→F#4→A5 arpeggio (commands `31`/`F0`, same tune data) is plainly audible
+twice later in the game. Measurements in §6 of `sound-rom-map.md` ("Checked
+against real-hardware audio"). One side finding: the note spacing shows the
+real tempo tick is ≈ 6.3 ms, not the ≈ 4.0 ms the emulation assumed — durations
+scale by ×1.5, pitches and sequences are unaffected.
+
 ---
 
 ## Q6. Two operator settings on the newer firmware — settled in emulation, cheap to confirm
@@ -168,6 +183,22 @@ questions:
   value (with doble/triple multiplier) is counted down and paid when the ball
   drains; at 0 the drain pays nothing. Confirm: set it to 0 and check that no
   bonus countdown happens at the end of a ball.
+
+---
+
+## Q6b. One clean sound recording would calibrate the sound tempo
+
+Settled by the existing video: pitch (exact), note sequences, and that ball
+start plays a single phrase. NOT settled: the sound board's tempo. The video
+shows the real machine's notes spaced ≈ 1.5× wider than the byte-level model
+predicts, and the emulation sits at yet a third value — three implementations
+of the same ROM, three tempi, because the timer tick includes the interrupt
+handler's own execution time and the three account for it differently.
+
+**What to ask for:** a phone recording, as close to the speaker as possible,
+of just (a) one coin being inserted and (b) one ball being served, ideally
+with little else happening. Ten seconds of audio gives the real tick period
+to about a millisecond and settles which accounting is correct.
 
 ---
 

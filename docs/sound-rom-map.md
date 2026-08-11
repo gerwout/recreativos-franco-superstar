@@ -698,6 +698,55 @@ command `00` at `24E` is `EN I / CALL $5C9 / JMP $0CB`, and `5C9` is another
 launcher, so the `JMP $0CB` at `251` is equally dead. There it is harmless —
 `28B` jumps to `0CB` anyway.
 
+### Checked against real-hardware audio
+
+The 115 s phone recording of a working machine
+(`video/Pinball super star [OFmSN9UxXuo].mkv`) confirms the conclusion on
+hardware. Video frames put the game start at t ≈ 2.0–2.25 s (attract scores
+933090 and CREDIT 9 still shown at 1.75 s, displays blanked at 2.0 s, score 0
+and CREDIT 8 by 2.25 s), and the only sound the machine makes there is
+sub-tune 1 and nothing else: two square-wave notes measured at 294.80 and
+295.53 Hz (D4 = 294.972 Hz predicted — within 4 cents), odd harmonics only,
+measured through the 13th (887.7 / 1474.4 / 2065.4 / 2655.8 / 3246.5 /
+3835.0 Hz against an ideal 884.9 / 1474.9 / 2064.8 / 2654.7 / 3244.7 /
+3834.6), onsets at t = 2.128 and 2.351 s. Nothing of sub-tune 2 follows: for
+a full second after the second note the E4 (330.000 Hz) band never leaves its
+−49 dBFS noise floor — ≥ 16 dB below the level the two played notes reached
+in their band — and the `59F` chord bands (660.0 / 996.2 / 1650.0 Hz) stay at
+the floor too. As a control, the same recording *does* contain tune `53C` —
+the would-have-been third sub-tune, reachable on its own through commands
+`31`/`F0` — played twice mid-game (t ≈ 53.6 s and 72.1 s) as the full
+D4→F#4→A5 arpeggio, identified to the cent by its harmonics (1115.5 Hz =
+3 × 371.83, 2639.7 Hz = 3 × 880.00). The third phrase is therefore loud and
+identifiable whenever it actually plays; its absence at ball start is real,
+not a detection failure.
+
+One calibration falls out of the same measurement. Pitch confirms the
+844 800 Hz PSG clock to within a few cents, but the ball-start notes' onset
+spacing is 220 ± 10 ms against the 147 ms the ≈ 4.00 ms tick of §3.2
+predicts — a factor of ≈ 1.5, and the `53C` arpeggio's note spacing
+(≈ 145–190 ms against a predicted 118 ms) is consistent with the same
+factor. This rescales tick-derived durations in §4 and changes nothing
+else — no pitch, no note sequence, no reachability result.
+
+The cause is NOT settled, and a first hypothesis died on measurement. "The
+8035 machine-cycle rate is ⅔ of the assumed 168 960/s" would explain the
+video, but the live PinMAME machine — same cycle table as the datasheet,
+verified opcode-by-opcode — was then measured directly: instrument counters
+on the timer ISR against the 100 Hz TRAP give a **5.000 ms** tick during
+command `0x41`'s tune, and an injected `0xB1` plays its two notes
+**306 ms** apart (offline model 147 ms, real machine 220 ± 10 ms). Three
+implementations of the same ROM, three different tempi. What that pattern
+does establish is that the tick is not the bare 672-cycle reload: the
+prescaler is cleared by the `STRT T` at the ISR's end (`0x026`), so each
+period is 672 cycles *plus the ISR pass that preceded it*, and the tempo
+therefore depends on per-pass ISR cycle accounting — which is where the
+three diverge. Pitch is unaffected (the PSG clock is independent), and the
+`0xB1` single-phrase conclusion is unaffected (confirmed on hardware above).
+A close-mic recording of one coin sound and one ball start would give the
+real tick to a millisecond and settle which accounting is right; asked for
+in `questions-for-a-real-machine.md`.
+
 ---
 
 ## 7. Corrections and additions to the existing project notes
