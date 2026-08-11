@@ -14,9 +14,11 @@ disagreement is called out. Statements that are inferred rather than measured
 are marked.
 
 > **Read §6 before wiring anything.** Two things will leave you with a machine
-> that looks alive but never starts a game: *caída de bolas* (switch 27) must
+> that looks alive but never gives you a ball: *caída de bolas* (switch 27) must
 > read **closed** whenever a ball is in the trough, and the coin switches must be
-> **pulsed**, never held.
+> **pulsed**, never held. §6.1 also covers who owns switch 27 — the driver models
+> the trough for you by default, and `Controller.HandleMechanics = 0` hands it
+> entirely to your table.
 
 
 ---
@@ -674,11 +676,20 @@ Powering on in this position clears all stored credits.
 **(1) Switch 27 (*caída de bolas*) must read CLOSED whenever a ball is in the
 trough — which is the rest state, including at power-on.**
 
-Both the game-start path and the fault-recovery path require it. Left open, the
-recovery loop ping-pongs forever: the interrupt handlers keep running so the
-machine *looks* alive — display refresh ticking, sound handshake completing,
-attract lamps sensible — while the foreground program is dead and nothing you do
-has any effect.
+Two different paths care, and they fail differently — worth separating, because
+only one of them is fatal:
+
+* **Serving a ball.** Start a game with the trough open and the machine takes the
+  credit, starts the game and then simply **never fires SALIDA BOLAS**. No ball,
+  no fault, no error display — it waits. Measured over 45 s: `C01C = 0x00`
+  throughout, kicker never gated, and closing switch 27 let play proceed
+  normally. This is the machine's own ball-missing behaviour and it is benign.
+* **Fault recovery.** After a fault (tilt, or set 2's stuck-contact watchdog) the
+  recovery path at `0x030F` needs the trough closed to let go. Left open it
+  ping-pongs with `0x0331` forever: the interrupt handlers keep running so the
+  machine *looks* alive — display refresh ticking, sound handshake completing,
+  attract lamps sensible — while the foreground program is dead and nothing you
+  do has any effect. **This is the one that will kill your table.**
 
 It must also **open** once the ball has been served, or the game ends every ball
 the instant it starts one. The correct model is a two-state trough:
@@ -701,11 +712,9 @@ treats every other mech: gated on `g_fHandleMechanics`. Set
 to be the only thing writing that bit; leave it alone and the driver will do the
 opening half for you. Either way you close it on drain.
 
-*Measured with the flag off:* the contact is not touched at power-on, a game
-started with an empty trough takes the credit and then **does not serve a ball**
-— the ROM simply never fires SALIDA BOLAS, with no fault and no error display —
-and closing switch 27 from the table gives an entirely normal game. That is the
-machine's own ball-missing behaviour, and it is the correct thing to see.
+*Measured with the flag off:* the contact is not touched at power-on, and a front
+end driving switch 27 itself gets an entirely normal game — coin, start, kicker,
+scoring, drain.
 
 A table that leaves the flag at its default plumbs it like this:
 
@@ -777,15 +786,20 @@ expiring. It does not rebuild the row every frame. So a switch your table sets
 stays set until your table clears it, which is what you want, and which is what
 makes the coin/start sequence work reliably from outside the keyboard.
 
+Switch 27 is the one place the driver writes a bit off its own bat rather than in
+response to your input, and that is what `Controller.HandleMechanics = 0` turns
+off — see §6.1. With it set to `0` the driver writes nothing in that row that you
+did not ask for.
+
 ### 6.2 The absolute minimum to get a game going
 
 | Item | Number | Why |
 |---|---|---|
-| Ball drain / outhole | switch **27** | Must be closed at rest, or nothing runs at all |
+| Ball drain / outhole | switch **27** | Closed at rest. Open, the machine will not serve a ball, and cannot recover from a fault — §6.1 |
 | Coin slot 25 pta | switch **25** | One of only two routes to a credit; pulse it |
 | Coin slot 100 pta | switch **26** | Ditto |
 | Start button | switch **28** | Starts a game *and* drives every operator menu |
-| Ball release | solenoid **10** (SALIDA BOLAS) | Serves the ball, and empties the trough |
+| Ball release | solenoid **10** (SALIDA BOLAS) | Serves the ball. Also empties the trough for you unless you set `HandleMechanics = 0` — §6.1 |
 
 Also:
 
@@ -836,7 +850,8 @@ SolCallback(5)  = "SolCoinMeter100"
 SolCallback(7)  = "SolResetLeftBank"    ' BANCADA IZQUIERDA
 SolCallback(8)  = "SolPicabolas"
 SolCallback(9)  = "SolResetRightBank"   ' BANCADA DERECHA
-SolCallback(10) = "SolBallRelease"      ' SALIDA BOLAS - also opens switch 27
+SolCallback(10) = "SolBallRelease"      ' SALIDA BOLAS - opens switch 27 for you
+                                        ' unless HandleMechanics = 0 (see 6.1)
 SolCallback(17) = "SndLeftBumper"       ' synthesised from switch 18
 SolCallback(18) = "SndRightBumper"      ' synthesised from switch 12
 SolCallback(19) = "SndLeftSling"        ' synthesised from switch 11 ...
@@ -850,6 +865,9 @@ SolCallback(47) = "SolLFlipper"
 
 ' ---- switches --------------------------------------------------
 Sub Table1_Init
+    ' Uncomment to own the trough outright - the driver then never touches
+    ' switch 27 and your ball physics are the only writer. See 6.1.
+    ' Controller.HandleMechanics = 0
     Controller.Switch(27) = True        ' ball in the trough: MUST be closed
 End Sub
 

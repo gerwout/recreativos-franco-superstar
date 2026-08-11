@@ -303,9 +303,14 @@ display and completed its sound handshake while the foreground program was dead.
 The third was found the same way, by a soak that kept serving the same ball.
 
 * **Caída de bolas must read closed at rest.** It is closed whenever a ball is
-  sitting in the trough. Both the game-start path at `0x0508` and the fault
-  recovery at `0x030F` require it. Left open, `0x030F` and `0x0331` ping-pong
-  forever.
+  sitting in the trough. Two paths care, and they fail differently. The
+  **game-start** path at `0x0508` will not *serve* without it: measured with the
+  contact held open, pressing start takes the credit and starts the game, then
+  SALIDA BOLAS is simply never gated — no ball, no fault, `C01C = 0x00` across
+  45 s — and the machine waits. That is the machine's own ball-missing behaviour
+  and it recovers the moment the contact closes. The **fault recovery** at
+  `0x030F` is the fatal one: left open it ping-pongs with `0x0331` forever, so a
+  machine that has tilted or tripped set 2's watchdog never comes back.
 * **Coin contacts must pulse.** `0x0545` latches the coin, then waits for the
   contact to **open** within 20 TRAP ticks (≈200 ms). If it is still closed it
   falls through to `0x055C` and jumps to the fault handler, which wedges the
