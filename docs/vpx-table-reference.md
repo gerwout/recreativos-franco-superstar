@@ -687,13 +687,27 @@ the instant it starts one. The correct model is a two-state trough:
 * opened when solenoid **10** (SALIDA BOLAS) fires;
 * closed again when the ball drains.
 
-The driver contains exactly that model. Half of it runs under VPX and half does
-not: the driver opens the contact by itself when SALIDA BOLAS fires, because
-that half is driven from the coil rather than from a key, but nothing closes it
-again unless the `HOME` key is available. So under VPX **your table must close
-switch 27 on drain and at power-on**, and may leave the opening to the driver or
-do it itself — the driver only writes the bit on those two events and never
-reasserts it, so whichever of you writes last wins and you will not fight it:
+The driver contains exactly that model, and **whether it runs is your choice**,
+through the standard PinMAME mechanics flag:
+
+| `Controller.HandleMechanics` | Who drives switch 27 |
+|---|---|
+| `&HFF` (VPinMAME's default) | The driver opens the contact when SALIDA BOLAS fires; **your table must close it on drain and at power-on.** |
+| `0` | Nobody but you. The driver never touches the contact — your ball physics own it end to end. |
+
+Ball position is a mechanical property, so the driver treats it the way core.c
+treats every other mech: gated on `g_fHandleMechanics`. Set
+`Controller.HandleMechanics = 0` in `Table1_Init` if you want your trough logic
+to be the only thing writing that bit; leave it alone and the driver will do the
+opening half for you. Either way you close it on drain.
+
+*Measured with the flag off:* the contact is not touched at power-on, a game
+started with an empty trough takes the credit and then **does not serve a ball**
+— the ROM simply never fires SALIDA BOLAS, with no fault and no error display —
+and closing switch 27 from the table gives an entirely normal game. That is the
+machine's own ball-missing behaviour, and it is the correct thing to see.
+
+A table that leaves the flag at its default plumbs it like this:
 
 ```vbscript
 Sub Table1_Init

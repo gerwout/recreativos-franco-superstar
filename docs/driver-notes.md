@@ -555,6 +555,41 @@ Measured, on `supstarf` with the DIP at its default (*juego*):
 
 Both ROM sets still pass `tools/rfranco_check.py` and `tools/rfranco_game.py`.
 
+## 7D. The trough model is gated on `g_fHandleMechanics`
+
+*CAIDA DE BOLAS* is an ordinary trough contact — manual contact 28, connector
+JO3, debounced on the driver board with the AR3 pull-ups like every other input.
+The machine senses a ball in the outhole exactly the way any pinball does, and
+the driver does not model the sensing.
+
+What the driver models is the ball **movement** that works the contact, because
+standalone PinMAME has no ball: SALIDA BOLAS firing stands in for "the ball
+left", and the DRAIN key for "the ball came back". That is mechanical simulation,
+and it used to run unconditionally — including under VPinMAME, where a table has
+its own ball physics driving the same switch. Two writers, one bit.
+
+Now gated on `g_fHandleMechanics`, which is the convention core.c already applies
+to the generic mech handler (`core.c:1783`) and `mech.c` to its own updates
+(`mech.c:93`). VPinMAME exposes it to the table as `Controller.HandleMechanics`
+(default `0xFF`), libpinmame defaults it to `0`, and the standalone build to
+`0xff` — so keyboard play is unchanged and a table can take the trough over
+completely by setting it to `0`.
+
+Measured on `supstarf` with the flag forced to `0`:
+
+| | Result |
+|---|---|
+| Trough at power-on | left **open** — the driver no longer forces a ball into it |
+| Game started with an empty trough | credit taken, game starts, and **SALIDA BOLAS never fires** — no ball served, no fault (`C01C = 0x00`) across 45 s |
+| Front end closes switch 27, then plays | entirely normal — kicker, scoring, drain |
+
+The middle row is the machine's own ball-missing behaviour. There is no "ball
+missing" message because there is nowhere to display one — the machine has only
+7-segment score displays — so waiting is the whole of the indication.
+
+With the flag at its default, standalone behaviour is byte-for-byte what it was:
+both sets still pass `tools/rfranco_check.py` and `tools/rfranco_game.py`.
+
 ## 8. What is verified, and how
 
 | Claim | Evidence |

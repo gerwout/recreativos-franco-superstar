@@ -277,6 +277,16 @@ PSG2 (IC2) and reading AY register `0x0E`, and the reply lands in `C027`.
 | PA7 | JC4 | JO2 | PULSADOR PARTIDAS |
 | PA0–PA3 | — | — | not wired |
 
+> **The manual contradicts itself on the JC column.** The driver-board sheet's
+> *"additional inputs debounced with AR3 pull-ups and capacitors"* table gives
+> these four as `JC5 → JO2` (pulsador partidas), `JC6 → JO3` (caída de bolas),
+> `JC1 → JO4` (m. 100 pts.) and `JC8 → JO5` (m. 25 pts.), which cannot be right:
+> the same manual assigns `JC5–JC8` to PB0–PB3 feeding lamp decoder IC3 (§6), and
+> a pin cannot be both. The JC numbers above are the CPU-board connector table's.
+> **Nothing depends on which is correct** — the JO column agrees in both sources,
+> and JO is the side the driver models. Flagged so the table is not read as
+> settled.
+
 **Bits 0–3 are never read by the game.** Every read of `C027` masks with `0x10`,
 `0x20`, `0x40` or `0x80` and nothing else.
 
