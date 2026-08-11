@@ -36,7 +36,7 @@ which one supports it.
    set bit below `0x1000` can be a sound-CPU hit. Handled two ways: positive
    claims below `0x1000` are only made for addresses outside the sound ROM's
    reachable-code ranges (transcribed from `sound-rom-map.md` §1 into
-   `soundcode.py`), and 29 disputed region entries were re-measured with
+   `soundcode.py`), and 33 disputed region entries were re-measured with
    `cpu=0` instrument points, which are CPU-filtered (§7).
 3. **A hand check of every unclassified residue**: each region the trace did
    not reach was either identified as a referenced data table (with the
@@ -104,8 +104,8 @@ groupings, not gaps.
 | `055F`-`05F3` | code | 149 | 25 pta path: CONTADOR 25 coil (C231=10), credit ladder (4th coin pays 2), coin audit (30EC), sound E1 |
 | `05F4`-`0634` | code | 65 | 100 pta path: CONTADOR 100 coil (C231=08), 5 credits (+1 bonus), coin audit (30E5), sound E1 |
 | `0635`-`06FF` | filler | 203 | FF fill |
-| `0700`-`0819` | code | 282 | ball-start / serve: sound 69, ball lamp select, SALIDA BOLAS arming, switch-scan result dispatch top: C026 (0x4000 byte) bit walk with per-contact CZ handlers, C02D edge memory |
-| `081A`-`0AFB` | code | 738 | playfield contact handlers: 10/100 puntos scoring, rampa especial (special collect check), diana bank target bits (C028/C029 -> lamp groups), pasillos, avance ladder stepping (0CBC offer logic called from here) |
+| `0700`-`081B` | code | 284 | ball-start / serve: sound 69, ball lamp select, SALIDA BOLAS arming, switch-scan result dispatch top: C026 (0x4000 byte) bit walk with per-contact CZ handlers, C02D edge memory |
+| `081C`-`0AFB` | code | 736 | playfield contact handlers: 10/100 puntos scoring, rampa especial (special collect check), diana bank target bits (C028/C029 -> lamp groups), pasillos, avance ladder stepping (0CBC offer logic called from here) |
 | `0AFC`-`0C3C` | code | 321 | bumper handler: sound E0 + 1000 points; drop-target bank state machines, ESPECIAL lamp arming on bank completion |
 | `0C3D`-`0C62` | code | 38 | extra-ball / especial collect: lamp 37, C7-area counters (set 2 only), sound F1 at 0C4B, credit or extra-ball award |
 | `0C63`-`0DBB` | code | 345 | main in-play loop: per-TRAP service, avance ladder rung compare (0CBC offer, C006 sign picks the side), bola-extra lamp arming, bank reset requests, C007 countdown dispatch |
@@ -151,7 +151,7 @@ groupings, not gaps.
 | `1A02`-`1A52` | code | 81 | lamp frame builder: one decoder slot per call (1A02), ten slots per decoder (1A2E), codes 8/9 from the second table byte |
 | `1A53`-`22FF` | filler | 2221 | FF fill - 2221 bytes, the largest gap; the old Ghidra pass left it undefined and it is genuinely empty |
 | `2300`-`2345` | code | 70 | pseudo-random generator: XOR/rotate LFSR over the four triple-stored bytes C1BC/C1BF/C1C2/C1C5, one step per call |
-| `2346`-`2375` | code | 48 | loteria draw (game over): 6 LFSR steps, then C (=9) against tiers 03/07/0F to pick the 00-90 lamp |
+| `2346`-`2375` | code | 48 | game-over random draw (2346, C=9 from 1210): six LFSR steps, then a tiered compare (03/07/0F) selecting the award - read as the loteria 00-90 lamp draw, an inference from the call site and the lamp group it feeds |
 | `2376`-`23FF` | filler | 138 | FF fill |
 | `2400`-`2436` | code | 55 | display serial writer: 9 clocks x (OUT FF + RAL + SIM) per frame, trailing SOD level = 8279 A0; entries 2400/2405/240D/2415 (E=DD/20/08, D=C0) and 2432 (caller E, D=40); ends B=AA -> 1987 (LOAD strobe) |
 | `2437`-`24A7` | code | 113 | per-TRAP display service: walks the C09C dirty flags and C0B4 shadow, writes one 8279 command/data pair per pass, final E=DD commit |
@@ -278,7 +278,10 @@ mechanisms exist: a bare `STA (8000)` with the value in `A`; the plain sender
 sender `1987` (set 2 `1A0D`) whose callers load `B` — a reply that does not
 echo `B` jumps to the falta handler.
 
-### 3.1 Set 1 — all 28 sites
+### 3.1 Set 1 — every send, by call site
+
+(26 `STA (8000)` sites plus the two reply reads `0044`/`188E`; rows marked
+`(B)` are callers of the echo sender `1987`, listed at their `MVI B` sites.)
 
 | site | cmd | context |
 |---|---|---|
@@ -370,7 +373,7 @@ conditioner (§6.3).
 | TRAP `0024` | `1800` (set 2 `19DA`) | 100 Hz mains | the whole output side lives here: lamp rebuild, display service, switch scan, cabinet poll, frame send. Set 2 wraps it in a re-entrancy sentinel (`C089`, §6.2) |
 | RST5.5 `002C` | `003F` | sound reply | two exits: echo-armed (`C033 == AA`) escapes the sender's spin via the `XTHL`/`PCHL` idiom; unarmed reads and discards the reply (`RNZ`), and a zero reply falls through the same escape |
 | RST6.5 `0034` | `0286` (set 2 `028E`) | falta (tilt) | `RNZ` if already latched. Stops sound, lights luz falta, saves lamp state, E-fills the display (`2A19`: 8279 command `90`, inhibit `A4`/`A8`, 16 × `EE` twice) |
-| RST7.5 `003C` | `0244` (set 2 `0250`) | power fail | terminal: `CC` to the sound CPU, spin at `026A`. The TRAP handler opens its one-instruction window (`182F`) and resets its latch (`SIM #1D` at `194C`) every pass, so the `SIM` bit-4 core fix is exercised even though the interrupt never fires |
+| RST7.5 `003C` | `0244` (set 2 `024C`) | power fail | terminal: `CC` to the sound CPU, spin at `026A`. The TRAP handler opens its one-instruction window (`182F`) and resets its latch (`SIM #1D` at `194C`) every pass, so the `SIM` bit-4 core fix is exercised even though the interrupt never fires |
 
 `188E` (`LDA 8000` inside the TRAP handler) reads and discards the reply latch
 once per pass — it is what keeps a late, unwanted reply from leaving RST5.5
@@ -477,8 +480,8 @@ pad the scan where set 1's shorter sequence sat (`18C1`–`18CB`).
 
 `070E`–`0713`: `LDA C7FA / ANI 01 / CNZ 3ABF` — the watchdog at `3ABF`
 (counters `C7E0`–`C7E7`, switches 11/12/18/47, fault past `0x7F` — measured in
-`hardware-findings.md`) is **gated on bit 0 of the `C7FA` zone setting**, a
-detail the earlier notes missed: the operator can turn it off. The fault
+`hardware-findings.md`) is gated on bit 0 of `C7FA`, the zone-18 setting
+(`vpx-table-reference.md` §5.1.1). The fault
 recovery gains a related 7-pass countdown (`107A`–`108E`) re-entering the
 falta handler while the offending contact stays closed, and recovery also
 honours `C7FA` when deciding which contacts must clear (`0338`–`034F`).
@@ -498,7 +501,7 @@ handler/editor in the new block:
 | `176D`–`1789` | 16 (`C7F8`) | credit cap: BCD nibbles compared against tens/units before adding |
 | `120A`–`121C` | (`C7EC`) | game-over lamp-bit clear when an extra-ball replay audit is pending |
 | `122A` | audit `C7EA` | counts extra-ball replays |
-| `0824`, `0DD8`/`0DE0`/`0E43`/`0E4B` (`C7F0`), `0E22` (`CALL 3A43`) | 10/11/14/18 area | left/right special bank-reset behaviour and collect variants |
+| `0824` (reads `C229`), `0DD8`/`0DE0`/`0E43`/`0E4B` (`C7F0` collect-variant marker), `0E22` (`CALL 3A43`) | 10/11/14 (`C7F1`/`C7F2`/`C7F5`) | left/right special bank-reset behaviour, diana-completion score, collect variants |
 
 ### 6.7 The new code block `3880`–`3B4D` (set-2-only, fully classified)
 
@@ -522,7 +525,7 @@ and the watchdog `3ABF`–`3B4D`.
 | `002F`-`0033` | filler | 5 | FF fill |
 | `0034`-`0036` | code | 3 | RST6.5 vector: JMP 028E |
 | `0037`-`003B` | filler | 5 | FF fill |
-| `003C`-`004C` | code | 17 | RST7.5 vector (JMP 0250) + RST5.5 handler; PCHL target 1A0B |
+| `003C`-`004C` | code | 17 | RST7.5 vector (JMP 024C) + RST5.5 handler; PCHL target 1A0B |
 | `004D`-`036B` | code | 799 | boot, modes, RST7.5/RST6.5 handlers, fault recovery - set 1 004D-033E shifted +4..+3B with small insertions (coin-audit calls at 0050, falta cabinet re-read at 028E-0299, recovery differences 032A-034F) |
 | `036C`-`0370` | filler | 5 | FF fill |
 | `0371`-`0686` | code | 790 | attract, game start, coin paths - set 1 0350-0634 shifted +21..+52 with insertions (attract cabinet read 0411-041C, coin conditioning hooks) |
@@ -575,7 +578,45 @@ artefact, recorded so nobody hunts for it later.
 
 ## 7. Static vs. dynamic coverage
 
-<!-- DYNAMIC_SECTION -->
+Seven sessions against the live driver (headless, private NVRAM per session,
+coverage started before the ROM finishes booting so the boot paths are
+captured): one per boot mode (JUEGO, BORRADO, TEST, AJUSTES ×2 — the second
+walking every zone with twelve value presses each and pulsing all 24 test
+contacts), a full played game with tilt/recovery, and a deep session — 260 s
+of attract (the carousel stepped through all of `C01D` `10`–`1C`, measured), a
+two-player game to over 1 000 000 per player (both players' score thresholds
+crossed, replays paid) with 29 CPU-filtered instrument points, plus a
+dedicated tilt run adding four more (33 in all).
+
+**Results.** Of the 5 120 static instruction starts:
+
+* **≥ `0x1000` (unambiguous): 3 151 of 3 571 executed (88 %).**
+* **< `0x1000`, outside the sound-code overlap: 842 of 1 148 (73 %).**
+* The 401 overlap addresses cannot be claimed from the bitmap; the instrument
+  points stand in for them: `004D`, `00B3`, `0102`, `0186`, `01E9`, `0271`,
+  `0350`, `03B5`, `0470`, `0508`, `0545`, `055F`, `057A`, `0700`, `0705`,
+  `0AFC`, `0C63` all counted (e.g. `03B5` attract ×3 142, `0700` in-play
+  ×10 487, `01E9` cold init ×1), and `0244` (RST7.5) counted **zero**, the
+  expected value. The 100-pta path (`05F4`/`060F`, both inside overlap) is
+  confirmed by state instead: one switch-26 pulse paid 5 credits.
+
+**Every gap explained.** The uncovered static code falls into these classes,
+each verified by reading the code at the reported ranges:
+
+| class | ranges (set 1) | why not executed |
+|---|---|---|
+| needs an input the driver never produces | `0244`–`0270` (RST7.5 handler, plus its head in the overlap zone, bitmap-zero from both CPUs); `055C` (stuck coin — the driver's coin one-shot always opens inside the 20-tick window) | correct behaviour, not a gap |
+| needs 3–4 players | `1372`–`13CB` (threshold blocks, players 3–4) | two-player session |
+| needs game states the automated stimuli did not reach | `0C87`–`0C9B` + `0D27`–`0D65` (extra-ball / picabolas-especial arming at exact ladder rungs), `0E14`–`0E93` (unscored-ball re-serve — every automated ball scored), `0ED2`–`0FFE` + `1001`–`1023` (end-of-ball bonus collect, countdown and picabolas coil — the ladder flag never armed in these runs; `tools/rfranco_game.py` demonstrates the same path live, so this is a stimulus gap), `13F0`–`1453` (rampa special-collect award — lamp 52 never lit for the blind pulse; the knocker itself was covered via the score-threshold award), `1656`–`1666` (bank-reset coil path), `0339`–`033C` (recovery with a ball on the picabolas contact) | reachable in play; the harness tools cover several of them in their own runs |
+| rare-value branches | `1615`–`161B`, `2967`–`2992` (credits ≥ 10 display/borrow), `3107`–`3121` (coin-audit BCD carries), `2361`–`2367` (the loteria tiers not drawn), `2621`–`26C4` pieces (score digit positions/carries not produced), assorted 2–10-byte else-arms throughout | value-dependent |
+| menu/mode edges | `33FD`–`3401`, `3456`–`348F` pieces, `358F`–`3809` pieces (zone-value wrap branches, the contact-test per-closure display, settings-validation failure arms `34E6`/`3512` — impossible with healthy NVRAM), `2DD8`–`2E19` (one carousel entry variant), `30A6`–`30DB` (audit pages not incremented by these scenarios), display-module entries `2400` (used only by RST7.5), `2448`–`244E`, `24F1` | mode-dependent |
+| warm-boot / falta edges in the overlap zone, bitmap-zero | `0057`, `0111`, `0117`, `0174`, `0179`, `01D3`–`01D6`, `0537`, `05CD` | validation-failure and coin-timing else-arms. The falta handler and recovery themselves (both in the overlap zone) were closed with a dedicated CPU-filtered run: tilt during play counted `0286` ×1 and `030C` ×1, `0244` ×0, and the recovery's `RST 0` re-boot counted `0102` a second time, ending with `C01C = 00` |
+
+No uncovered range is unexplained, and none of the explanations required
+amending the static classification: everything the dynamic pass executed lies
+inside the statically-traced code, and nothing classified as data, dead or
+fill was ever executed (checked against the merged bitmap for `≥ 0x1000` and
+the clean subset below it).
 
 ---
 
