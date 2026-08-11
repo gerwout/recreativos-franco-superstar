@@ -73,6 +73,15 @@ swapped. That is the same single-transposition error the manual's own
 it. But the ROM drives Q1, so if the table is right as printed the machine
 cannot knock, and Q1 above will show that immediately.
 
+Two things are worth knowing about how solid each side of this is. The
+schematic reading is calibrated: the same sheet draws the three lamp decoders
+in the same style, their true mappings are known from the ROM, and all
+twenty-five verifiable rows agree with the printed pin numbers — so nobody has
+misread the drawing; either the drawing is wrong in exactly those two rows, or
+the machine really never knocks. And the errata's other entries are largely
+*board-revision* notes, so a late rewire of TACA that never made the errata
+would be in character for this manual.
+
 **What to ask, if someone is willing to open the machine:** with the power off,
 on the driver board (ref. 53/3308), does JL6's wire trace back to **pin 3** of
 IC7 (that is Q0) or **pin 14** (Q1)? A photo of the board around IC7 and JL may
@@ -141,21 +150,24 @@ which is why it is worth thirty seconds to check.
 
 ---
 
-## Q6. Two operator settings on the newer firmware whose effect was never isolated
+## Q6. Two operator settings on the newer firmware — settled in emulation, cheap to confirm
 
 Only relevant if the machine has the **newer** firmware — it has **19**
 adjustment zones rather than 9. (Count them in the operator menu; see Q8.)
 
-Both of these are understood from the disassembly as far as the instruction they
-gate, but changing them in the emulation did not produce a difference that could
-be separated from other behaviour.
+Both were open for a long time and have now been isolated on the emulated
+machine with debugger instrumentation, so these are confirmations rather than
+questions:
 
-- **Zone 13** is believed to be the *maximum number of extra balls per game*.
-  Ask: with zone 13 set to 1 versus a higher value, does the machine award more
-  than one extra ball in a single game?
-- **Zone 19** is believed to affect what happens to the *avance* ladder (the
-  10,000→100,000 lamp ladder) at the end of a ball. Ask: with it set to 0 versus
-  1, does the ladder carry over between balls or reset?
+- **Zone 13** is the extra-ball cap **per ball in play** (not per game): with it
+  at 1, a second extra ball cannot be earned until the earned one has been
+  played, and draining without an earned extra ball resets the count. Confirm:
+  set zone 13 to 1, earn and play an extra ball, and see whether the next ball
+  can earn one again (it should).
+- **Zone 19** is the **end-of-ball bonus collect**: at 1 the *avance* ladder
+  value (with doble/triple multiplier) is counted down and paid when the ball
+  drains; at 0 the drain pays nothing. Confirm: set it to 0 and check that no
+  bonus countdown happens at the end of a ball.
 
 ---
 

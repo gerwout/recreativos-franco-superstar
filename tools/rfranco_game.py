@@ -27,20 +27,18 @@ from outside:
     it to drain; the driver opens it again by itself when the game fires SALIDA
     BOLAS, because that is what the real outhole kicker does.
 
-KNOWN GAP: `g_fHandleMechanics == 0` is not covered, and cannot be from here.
-The trough model above is gated on that flag (rfranco.c:695, commit b4be2cef) so
-that a front end with its own ball physics owns switch 27 instead. Standalone
-PinMAME fixes the flag at 0xff (core.c:90) and offers no command line, rc file
-or debugger route to change it - the only writer in the whole build is the P-ROC
-path (core.c:2502), which needs PROC_SUPPORT compiled in and real hardware. So
-the gated-off branch is only reachable from VPinMAME (Controller.HandleMechanics
-= 0) or libpinmame (which defaults it to 0), and a regression that broke it
-would not show up here. What this harness does cover is the half of the contract
-that is testable either way: the driver only touches the contact on the two
-events, never re-asserting it frame by frame, so a front end's own value
-survives in between - see the last check in play(). Closing the gap properly
-needs a way to set the flag from outside, which would be a driver/core change
-and is deliberately not made here.
+GAP CLOSED: `g_fHandleMechanics == 0` - the front-end-owned trough - is now
+covered by tools/rfranco_mech.py. The trough model is gated on that flag
+(rfranco.c, rfranco_ownsBall; commit b4be2cef) so a front end with its own ball
+physics owns switch 27 instead. The standalone build still fixes the flag at
+0xff at boot, but the debug API exposes it (/api/mechanics), which is what
+rfranco_mech.py uses to play the front end's role: it verifies the driver never
+touches the contact with the flag at 0, that a game started with an empty
+trough waits without faulting, and that a fully front-end-driven ball works.
+What THIS harness covers is the other half of the contract, testable under
+either flag value: the driver only touches the contact on the two ball events,
+never re-asserting it frame by frame, so a front end's own value survives in
+between - see the last check in play().
 """
 import argparse
 import json

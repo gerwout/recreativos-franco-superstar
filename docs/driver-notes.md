@@ -334,13 +334,42 @@ Before/after over the same 5 s window:
 | `0x196B` | TRAP handler RET | 34 | 176 |
 | `0x0286` | error path | 67 | 0 |
 
-**The guard timeout is not derived from anything.** It is currently 1000 µs
-(`RFRANCO_SOUND_GUARD_US`, `rfranco.c:165`; a literal 100 µs until commit
-`a655aa50`, which is the figure earlier revisions of this document quoted).
-500 µs was measured as behaving correctly and 50 ms as much worse (the main CPU
-stalls long enough to distort game timing). If the guard fires before the 8035
-has collected a byte, the main CPU is released early and reads a stale reply —
-which shows up as the echo check at `0x198E` failing. See §7.
+**The guard timeout is derived from the sound ROM.** It is 4000 µs
+(`RFRANCO_SOUND_GUARD_US`; 1000 µs before the derivation existed, and a literal
+100 µs until commit `a655aa50`). The bound it must exceed is the worst case the
+8035 can legitimately take between the 8085's write (INT asserted) and its
+`MOVX` read of the latch at `0x02B`: the interrupt is recognised at the first
+instruction boundary with no interrupt in progress and `EN I` in effect, plus a
+fixed 12 machine cycles from recognition to the read. The longest blocked
+stretch the ROM can produce — computed by cycle-accurate emulation of the sound
+ROM over every command's complete run — is one timer-ISR pass of the
+three-voice player at a chord boundary where all three voice countdowns expire
+in the same tick and voice A also consumes the envelope re-arm event (tune
+`0x7CA`, commands `0x01`/`0xB0`): 468 cycles at 5.92 µs = **2770 µs** (computed).
+Runners-up `0x11` 2243 µs and `0x00` 2089 µs; every non-tune path is ≤ 953 µs.
+Guard = 2770 µs × 1.44 ≈ 4000 µs. It must also stay below the span of any 32
+consecutive latch writes, because the guard timers cannot be cancelled and the
+trigger numbers rotate through `RFRANCO_SOUND_TRIGGERS` = 32: the longest burst
+is 23 writes (`0xDD` + 20 frame bytes + `0xAA` + `0x99` per TRAP pass, ~2 ms),
+so 32 consecutive writes always straddle a full 10 ms TRAP period — 4000 µs
+passes with ≥ 2× headroom, and stays far below the 50 ms that was measured to
+distort game timing when the sound CPU never answers.
+
+Measured against the running driver (exec-trace on both CPUs, 238 425
+handshakes over attract, a played game and repeated faults): every latency
+matches the computed path within 3 cycles, max observed 971 µs on the 953 µs
+tune-end path, and the `0x00` tune's boundary pass shows exactly the computed
+blocked-cycle count. The old 1000 µs sat inside the chord windows but was never
+caught misbehaving, for two measured reasons: the TRAP-burst commands are
+phase-locked away from the long passes (a tick pending during the burst's
+in-ISR chain is postponed past it, and the `MOV T,#EB` reload inside the ISR
+drags the tick phase with it every frame), and a prematurely released 8085 on
+the `0x196C` path still `HLT`s for the RST 5.5 reply before writing again.
+Neither mechanism covers the main-loop bare `STA (8000)` sends, which were
+measured landing inside blocked passes (up to 840 µs), so the computed bound is
+the one that holds. If the guard ever fires before the 8035 has collected a
+byte, the main CPU is released early and reads a stale reply — which shows up
+as the echo check at `0x198E` failing. See `hardware-findings.md` §11.
 
 ---
 
@@ -416,17 +445,101 @@ the same manual's *fe de erratas* already corrects two transpositions of exactly
 this kind (connector JA reversed, IC5 pins 10 and 11 swapped), and a machine
 whose replay never bangs is not credible. **Only a physical board settles it.**
 
-### 7.2 The READY guard timeout still has no derivation
+The reading itself is no longer in doubt. The same sheet draws the three lamp
+decoders in the identical style, and their true mappings are ROM-verified: read
+by the printed pin numbers, every verifiable row - all ten of IC2's, including
+codes 8 and 9, the five wired rows of IC3 and the wired rows of IC1 - lands
+exactly on the measured lamp map. Twenty-five rows calibrate the convention; the
+two IC7 rows are the sheet's only outliers against the ROM. Note also that the
+*fe de erratas* revisits this very page (it moves the falta lamp onto IC1 pin 3)
+without touching IC7 - and that its other entries are board-revision notes, not
+drawing fixes, so a late TACA move from Q0 to Q1 that never made the errata is
+exactly the kind of change it records elsewhere. What to ask someone with a
+machine is written up in `questions-for-a-real-machine.md` Q1/Q2.
 
-See §5. It is now 1000 µs with a comment explaining the bound rather than the
-value, and the transfer no longer loses bytes, but nothing derives it. The
-symptom to watch for is the echo check at `0x198E` failing.
+### 7.2 The READY guard timeout — closed, now derived
 
-### 7.3 `MDRV_INTERLEAVE(500)` has not been retested since READY was modelled
+See §5. It is now 4000 µs, derived: worst-case INT-to-latch-read latency
+2770 µs (computed from the sound ROM, the `0x01`/`0xB0` chord-boundary
+timer-ISR pass) × 1.44 margin, bounded above by the 32-trigger rotation
+(longest write burst is 23, so trigger reuse always spans a full TRAP period)
+and by the 50 ms figure that measurably distorts game timing. Verified live
+against 238 425 traced handshakes; agreement within 3 cycles. The symptom to
+watch for if it is ever changed is still the echo check at `0x198E` failing.
+
+### 7.3 `MDRV_INTERLEAVE` retested since READY was modelled: 500 comes down to 250
 
 It was raised for the sound handshake before the trigger-based READY model
-existed. It may be able to come down now, which would be worth real time on a
-host CPU, but nothing has tested it.
+existed. Retested empirically (2026-08-11) on a scratch copy of the tree with
+`RFRANCO_SOUND_GUARD_US 4000` in place: one rebuild per rung, and for every
+rung `rfranco_check.py --rom all`, plus `rfranco_game.py --rom all` where the
+check passed, plus `rfranco_sound.py --rom supstarf` at the surviving rungs,
+all from a cold NVRAM in a private `-nvram_directory` (see the caveats below).
+
+| Interleave | check sf | check fa | game sf | game fa | sound sf |
+|---|---|---|---|---|---|
+| 500 | pass | pass | pass | pass | pass |
+| 250 | pass x2 | pass x2 | pass x2 | pass x2 | pass |
+| 150 | pass | pass | pass | pass | pass |
+| 100 | pass | pass | **fail** | pass | - |
+| 50 | pass | **fail x2** | - | - | - |
+| 20, 10, 5, 1 | **boot wedge** | **boot wedge** | - | - | - |
+
+The failure modes, lowest first:
+
+* **1-20: both sets wedge at power-on.** Blank display for ever, the 8085
+  circling the boot delay at `0x19F4-0x19FC` (set 1; the `0x1A7D` region on
+  set 2) and the 8035 stuck in its `0x0D8-0x0EF` init. The READY trigger only
+  covers the per-byte stall in `rfranco_sound_w`; the power-on handshake is
+  still interleave-carried, so the constant cannot go anywhere near 1.
+* **50: supstarfa never settles.** TRAP entries outnumber completed display
+  passes ~4x (935 entries vs 248 display calls in one window) - handler passes
+  start but do not finish. Genuine, reproduced twice.
+* **100: supstarf's end-of-ball bonus assert fails.** The avance ladder is
+  consumed in-play instead of surviving to the drain, so `rfranco_game` sees
+  per-turn bonus `[0, 0, 0]`. The total final score is identical to the 500
+  run (292330), every other check passes, `C01C` stays clear - so this is the
+  wall-clock harness stimuli landing at different emulated phases (headless
+  the machine runs ~0.35x real time at 500 but ~0.87x at 100, measured against
+  the 100 Hz TRAP), not a corrupted transfer. Scaling the pulse widths to
+  match emulated closure width did not change it, so it is phase, not width.
+  By the harness bar it is a fail all the same.
+
+**Conclusion: `MDRV_INTERLEAVE(250)`**, applied to the driver. Lowest
+fully-passing rung (150) x 1.7, 5x the highest `rfranco_check` failure (50).
+Passes check, game and sound repeatedly on both sets. What it buys, measured
+headless on supstarf in steady attract (30 s `/proc` utime+stime samples, two
+runs each, spread < 0.001):
+
+| Interleave | emulated speed (vs wall) | host CPU fraction | CPU per emulated second |
+|---|---|---|---|
+| 500 | 0.35x | 0.091 | 0.26 |
+| 250 | 0.57x | 0.098 | 0.17 |
+| 150 | 0.73x | 0.102 | 0.14 |
+| 100 | 0.87x | 0.107 | 0.12 |
+
+At 500 the headless machine cannot even hold real time - the per-slice
+overhead is paid in scheduler sleeps, not CPU - so 250 also cuts the wall
+time of the harness suite by ~30-40% (`check --rom all` 91 s -> 73 s,
+`game --rom all` 169 s -> 131 s). The slice quantum at 250 is ~67 us, still
+far inside the 4000 us sound guard's 1230 us margin (§5). If it is ever
+lowered again the symptoms appear in this order: `rfranco_game`'s bonus
+attribution (~100), supstarfa's settle (~50), a power-on wedge (~20).
+
+Two caveats earned the hard way during this retest, worth keeping:
+
+* **NVRAM is global.** Every run of any harness shares
+  `~/.xpinmame/nvram/<set>.nv`, and a machine killed while wedged mid-boot
+  saves garbage there, which then wedges every later boot of the same set in
+  every tree - it looks exactly like a driver regression ("the credit display
+  never came up" / "attract loop never started") and it survives rebuilds.
+  Concurrent harness runs also collide on the fixed HTTP ports (8931-8933).
+  Experiments on a copy of the tree should pass `-nvram_directory` somewhere
+  private and move the harness ports.
+* The check/game harnesses drive switches in wall-clock milliseconds while
+  the headless machine's emulated speed varies with interleave (and with host
+  load), so gameplay-attribution assertions are speed-sensitive. The bonus
+  check at 100 above is the example: same total score, different attribution.
 
 ### 7.4 Smaller things
 
@@ -437,15 +550,18 @@ host CPU, but nothing has tested it.
   zero-initialised tail. Correct in both build types (index 15 is zero either
   way), but in a `MAME_DEBUG` build nibbles `0x0A`-`0x0E` render as letters
   where a 7447 would not.
-* `supstarfa`'s zone 13 (`C7F4`) reads from the ROM as the per-game extra-ball
-  limit — `0x0CBC` compares `C7F4 - 1` against `C7F7`, the count already awarded
-  this game — but has not been isolated behaviourally: the same path is gated a
-  few instructions later on the free-running counter at `C006`, and repeated
-  trials at each setting did not separate the limit from that. The reading
-  stands on the disassembly alone. See `hardware-findings.md` §15.9.
-* `supstarfa`'s zone 19 (`C7FD`) is understood as far as the instruction it
-  gates but its visible effect has not been isolated. See
-  `hardware-findings.md` §15.10.
+* `supstarfa`'s zone 13 (`C7F4`) is now settled behaviourally — it is the
+  extra-ball cap per *ball in play*, not per game: `0x0CBC`'s refusal (`RC` at
+  `0x0CC4`) happens before `C006` is even loaded, `C006`'s sign only selects
+  which side's BOLA EXTRA lamp arms, and a drain without the earned lamp zeroes
+  `C7F7`. Isolated with PC hit counters and forced NVRAM on the running
+  machine — `hardware-findings.md` §15.9 has the trials.
+* `supstarfa`'s zone 19 (`C7FD`) is the end-of-ball bonus collect: at 1 the
+  drain pays out the avance ladder through the countdown at `0x0F9E`
+  (measured: +10 000 and +30 000 from the matching rungs, the last ball
+  included), at 0 the call at `0x11E6` is skipped and the value is lost.
+  The ladder opens the next ball on 10 000 either way — that reset belongs
+  to the serve path, not the zone. See `hardware-findings.md` §15.10.
 
 ### 7.5 Closed since the last revision of this document
 
@@ -628,7 +744,7 @@ both sets still pass `tools/rfranco_check.py` and `tools/rfranco_game.py`.
 | A complete game plays on both sets | `tools/rfranco_game.py --rom all`: coin → credit → start button lamp → start → SALIDA BOLAS → JUGADOR 1 and BOLA 1 lamps → eight playfield contacts each scoring → both drop-target banks lighting their ESPECIAL lamps → collecting one awards a credit and gates the knocker → ball 1/2/3 each ending with its bonus and each being re-served → FIN DE JUEGO → the final score held into attract, with `C01C` still 0 |
 | Solenoid 2 fires on a replay award | Observed rather than inferred: the coil select taken off PSG1 port B reads 4028 output 1 at the same moment the credit appears, on both sets. Which coil is on that output is §7.1 |
 | The two *expulsores* are the slingshots | Manual page 3's contact drawing places contacts 24 and 25 inside the two bottom-corner triangles; the parts list names that mechanism *rechazador*; it is the only coil mechanism the driver board's JL connector does not account for, and there are two of them. The ROM's own contact test independently says 24+25 are paralleled onto AD0 |
-| `supstarfa` has ten extra operator zones, not sixteen | Walked on the machine: the BCD zone counter steps 9 → 10 and stops at 19, so six of the jump table's 25 entries are unreachable. Each new zone's NVRAM byte and displayed range were read off the machine while walking the menu, and eight of the ten effects were then established by changing the value and measuring the difference. **Zones 13 and 19 are the exceptions**: both rest on the disassembly alone and neither was isolated behaviourally — see `hardware-findings.md` §15.9 and §15.10, and §7.4 above |
+| `supstarfa` has ten extra operator zones, not sixteen | Walked on the machine: the BCD zone counter steps 9 → 10 and stops at 19, so six of the jump table's 25 entries are unreachable. Each new zone's NVRAM byte and displayed range were read off the machine while walking the menu, and all ten effects were then established by changing the value and measuring the difference — zones 13 and 19 last, isolated with PC hit counters and forced NVRAM after plain replay trials could not separate them; see `hardware-findings.md` §15.9 and §15.10 |
 
 Not verified against real hardware: nothing here has been checked on a physical
 machine. Everything is derived from the factory manual, the two ROM images and the

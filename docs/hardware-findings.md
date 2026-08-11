@@ -585,6 +585,26 @@ bottom two rows have their JL destinations transposed — the same manual's own
 (connector JA reversed, IC5 pins 10 and 11 swapped) — and keeps TACA on code 1.
 **This is an inference. Only a physical board settles it.**
 
+The schematic reading has since been calibrated against the rest of its own
+sheet, and it holds. Page 17 draws all four decoders in the same style, and the
+three lamp decoders' true mappings are known from the ROM and from measurement
+(§6). Read by the printed pin numbers, every verifiable row agrees: IC2's ten
+rows land exactly on *bola 1ª–5ª / fin de juego / bola extra / especial
+picabolas* and *avance doble/triple* on codes 8/9; IC3's five wired rows land on
+the bumper/especial/bola-extra/pasillo/pulsador lamps; IC1's wired rows land on
+the jugador and lotería lamps with codes 8/9 correctly N.U. Twenty-five rows
+validate the pin-number convention, so a misreading of the sheet is ruled out;
+the disagreement is genuinely in the drawing or in the board. Two further
+observations sharpen it without settling it. The *fe de erratas* revisits this
+same page — it moves the falta lamp onto IC1 pin 3 — and leaves IC7 alone. And
+its entries are predominantly board-revision notes (the picabolas contact
+*moves* to JN2; the falta lamp *now* leaves by IC1 pin 3), so a late rewire of
+TACA from Q0 to Q1, made after the sheet was drawn and never recorded, is the
+kind of change this manual demonstrably accumulated. The firmware, which only
+ever gates Q1, would then simply be firmware written for the shipped board.
+What would decide it, and how to ask someone with a machine, is in
+`questions-for-a-real-machine.md` Q1/Q2.
+
 **Code 5 — the `FLIPPER` relay — is never asserted.** The interconnect board
 calls the relay it drives *relé alimentación bobinas* (RL1, 75 Ω, on J2-9), so the
 name on JL3 is misleading. Since the ROM never energises it and the machine
@@ -887,11 +907,34 @@ Measured over the same 5 s window that previously showed 853 TRAP entries agains
 
 Every TRAP now completes, and SP holds a narrow band instead of walking down.
 
-The guard timeout is sensitive and has no derivation: 500 µs was measured as
-behaving correctly, 50 ms as much worse (the main CPU stalls long enough to
-distort game timing). The driver currently uses 1000 µs
-(`RFRANCO_SOUND_GUARD_US`, `rfranco.c:165`); it was a literal 100 µs until commit
-`a655aa50`, which is the figure this section carried before. See §15.
+The guard timeout is now derived. The 8035 takes the external interrupt at the
+first instruction boundary with no interrupt in progress and `EN I` in effect,
+then needs 12 machine cycles to its `MOVX` read at `0x02B`; the longest blocked
+stretch the sound ROM can produce is one timer-ISR pass of the three-voice
+player at a chord boundary where all three voice countdowns expire in the same
+tick and voice A also consumes the envelope re-arm event (tune `0x7CA`,
+commands `0x01`/`0xB0`): 468 machine cycles = **2770 µs** at 168 960 cycles/s
+(computed — cycle-accurate emulation of the sound ROM across every command's
+complete run; runners-up `0x11` 2243 µs, `0x00` 2089 µs, every non-tune path
+≤ 953 µs, one polled `0xDD` frame byte 12 cycles = 71 µs). The driver uses
+2770 µs × 1.44 ≈ **4000 µs** (`RFRANCO_SOUND_GUARD_US`). Two constraints cap
+it from above: any 32 consecutive writes must outlast it, because the guard
+timers cannot be cancelled and the trigger numbers rotate through 32 — the
+longest burst is 23 writes (`0xDD` + 20 + `0xAA` + `0x99` per TRAP pass,
+~2 ms), so 32 writes always straddle a full 10 ms TRAP period — and 50 ms was
+measured to distort game timing when the sound CPU never answers. Measured
+(exec-trace on both CPUs, 238 425 handshakes over attract, a played game and
+repeated faults): latencies match the computed paths within 3 cycles, max
+observed 971 µs on the 953 µs tune-end path; the `0x00` boundary pass shows
+339 traced blocked cycles, exactly the computed figure. The earlier 1000 µs
+(empirical; a literal 100 µs until commit `a655aa50`) sat inside the chord
+windows but escaped detection because the TRAP-burst commands are phase-locked
+away from the long passes — a tick pending during the burst's in-ISR chain is
+postponed past it and the ISR's `T` reload drags the tick phase with it every
+frame — and because a prematurely released 8085 on the `0x196C` path still
+`HLT`s for the RST 5.5 reply. Main-loop bare `STA (8000)` sends have neither
+protection and were measured inside blocked passes (up to 840 µs), so the
+computed bound is the operative one. See §15.
 
 ## 12. Timing constants and how each was established
 
@@ -902,7 +945,7 @@ distort game timing). The driver currently uses 1000 µs
 | 8035 clock | 168 960 | XTAL/2 pin frequency ÷ 15 machine cycles; MCS-48 core wants machine cycles |
 | PSG clock | 844 800 | 8035 T0 = XTAL/6; corroborated by the ROM's tone table (§9.4) |
 | Interleave | 500 | empirical, raised for the sound handshake before READY was modelled; re-test |
-| READY guard | 1000 µs | **not derived** — `RFRANCO_SOUND_GUARD_US`, `rfranco.c:165`; see §15 |
+| READY guard | 4000 µs | derived: worst-case INT-to-latch-read 2770 µs (computed, §11) × 1.44; capped by the 32-trigger rotation and the 50 ms game-timing limit — `RFRANCO_SOUND_GUARD_US` |
 | RST 7.5 rate | *none* | the driver never asserts RST 7.5 and has no constant for it. `RFRANCO_RST75FREQ`, a guessed 400 Hz that nothing read, was removed in `a655aa50`; the reason the line is deliberately not driven is `rfranco.c:148` and §3 |
 
 ## 13. Measurement caveats
@@ -982,10 +1025,15 @@ closed are listed underneath with what closed them.
    numbers printed on it, puts TACA on output 0 and an unwired JL10 on output 1
    (§7.2). One of the two is wrong and only a physical board decides. The driver
    follows the ROM.
-2. **The READY guard timeout.** 1000 µs, with a bound argued from the 8035's
-   per-byte cost but not derived. The transfer no longer loses bytes, but the
-   number itself is still chosen rather than computed. The symptom to watch for
-   if it is ever changed is the echo check at `0x198E` falling behind the TRAP
+2. **The READY guard timeout** — *closed*. Now 4000 µs, derived rather than
+   chosen: worst-case INT-to-latch-read latency is 2770 µs (computed — the
+   `0x01`/`0xB0` chord-boundary timer-ISR pass, 468 machine cycles; see §11)
+   with a 1.44× margin, and the value is capped from above by the 32-trigger
+   rotation (the longest write burst is 23, so trigger reuse always spans a
+   full TRAP period) and by the 50 ms figure that measurably distorts game
+   timing. Cross-checked live against 238 425 traced handshakes (agreement
+   within 3 cycles, max observed 971 µs). The symptom to watch for if it is
+   ever changed is still the echo check at `0x198E` falling behind the TRAP
    count.
 3. **PinMAME's 8085 core has no mask-reveal recheck.** `i8085_set_RST55()`
    returns early when the interrupt is masked, leaving `IREQ` set but never
@@ -1006,24 +1054,55 @@ closed are listed underneath with what closed them.
 8. **Connector JA pin numbering.** The errata reverses the whole connector and the
    two boards' sheets number it in opposite directions. Signal names are reliable;
    pin numbers on JA are not.
-9. **`supstarfa` zone 13 (`C7F4`), behaviourally.** The ROM is clear enough —
-   `0x0CBC` compares `C7F4 - 1` against `C7F7`, the extra balls already awarded
-   this game, and abandons the award when the count is higher — but the same
-   path is gated a few instructions later on a free-running counter at `C006`,
-   so whether any one completed *diana* arms the BOLA EXTRA lamp is a coin toss.
-   Repeated trials at each setting did not separate the limit from that, so the
-   reading stands on the disassembly alone.
-10. **`supstarfa` zone 19 (`C7FD`).** The instruction it gates is not in doubt: at
-   `0x11E6`, on the path between balls, it decides whether `0x0F70` runs, and
-   `0x0F70` forces the saved avance ladder at `C094`/`C097` to its bottom rung
-   and sets the `C7FE` flag. What has not been isolated is the visible
-   consequence. `C094`/`C097` is read back at `0x1062` and written into the live
-   ladder at `C226`/`C22C`, which reads as a ball-to-ball carry-over of the
-   avance ladder — but with the setting off and a saved value deliberately
-   different from the live one, the next ball still started at the bottom rung,
-   so `0x1062` is evidently not on the ordinary new-ball path. The likely reading
-   is that this is about the ball being held by the *picabolas* rather than about
-   ball changes; that has not been tested.
+9. **`supstarfa` zone 13 (`C7F4`)** - *closed*. Measured on the running machine
+   by driving both counters through the debugger, and the earlier reading of
+   the `C006` load as a second gate was wrong. The check at `0x0CBC` runs when
+   the avance ladder steps into the rung held in `C1F9` (the zone-2 extra-ball
+   threshold, triple-stored, default 6); if `C7F7` — extra balls already
+   collected this turn — has reached `C7F4`, the `RC` at `0x0CC4` abandons the
+   offer *before* `C006` is ever read. `C006`'s sign at `0x0CC9` only chooses
+   which side is offered: lamp 53 (BOLA EXTRA DIANA IZQUIERDA) when positive,
+   lamp 43 (DERECHA) when negative — an offer is always made when the limit
+   passes, so there is no coin toss about *whether*, only about *where*.
+   Completing the bank under the lit lamp collects it: `0x0C4A` increments
+   `C7F7`, lights lamp 37 and sends sound `0xF1`, and the drain then replays
+   the same ball number (`0x1265` is skipped, `C7EA` audits it). Forcing
+   `C1F9` to 2, resetting the ladder shadow and completing a *diana* at each
+   boundary: (`C7F4`,`C7F7`) = (1,0), (3,1) and (3,2) armed a lamp; (1,1) and
+   (3,3) were refused with the hit counter at `0x0CC5` unmoved. "Per game" was
+   also wrong: `0x123D` zeroes `C7F7` at every end of turn that is not an
+   extra-ball replay (measured 3 → 0), so `C7F4` is the maximum number of
+   *consecutive* extra balls on one ball in play — at the default of 1, one
+   per ball, every ball.
+10. **`supstarfa` zone 19 (`C7FD`)** - *closed*. It is the end-of-ball bonus
+   collect. The drain handler (`0x0A39` → `0x11AF`) reaches the gate at
+   `0x11E6` only when the player's ladder flag — `C20E` + 3·(player−1),
+   indexed by `0x1528`, set to `0xFF` the first time the ladder lights — is
+   non-zero. At 1 the call at `0x11EE` runs `0x0F70`, which joins the same
+   countdown the *picabolas* collect uses at `0x0F9E`: sound `0xB0`, then the
+   live ladder (`C226`/`C22C`) steps down one rung per tick and every tick
+   pays 10 000 through `0x14C2` (`0x14D7` pays it two or three times over
+   under the *avance doble/triple* bits in `C22F`). What `0x0F70` writes to
+   `C094`/`C097` is not a carry-over at all: those cells are the countdown's
+   save slot. The picabolas entry at `0x0F88` fills them with the live ladder
+   and clears `C7FE`, so the epilogue at `0x1048` restores the ladder at
+   `0x1062` and a picabolas collect leaves it standing; `0x0F70` instead
+   forces the slot to the bottom rung and sets `C7FE`, the restore is
+   skipped, and the forced value is never read back — `0x1062` is the only
+   reader. Measured with the ladder driven to a known rung and instrument
+   counters on the gate, both entries, the countdown and the restore: at 1, a
+   drain on the 10 000 rung paid +10 000 and one on the 30 000 rung +30 000
+   (`0x11E6`, `0x11EE`, `0x0F70`, `0x0F9E` one hit each; `0x0F88`, `0x1062`
+   none), the last ball included — the bonus lands before FIN DE JUEGO. At 0
+   the same drain paid nothing (`0x11E6` one hit, `0x11EE` none). The earlier
+   puzzle — the next ball opening on the bottom rung either way — is the
+   serve path's doing, not the zone's: with the collect skipped and the
+   ladder left on 30 000, ball 3 still opened with `C226` = `0x80`. So the
+   setting decides whether the bonus is paid, never whether the ladder
+   carries over. The ×2/×3 arithmetic is the one part read from the
+   disassembly rather than measured — the trials ran with *doble* and
+   *triple* out. `C7FD` has no other reader in game code; `0x3969`, `0x3A24`
+   and `0x3A2A` are the menu.
 
 ### Closed since the first pass
 
@@ -1031,7 +1110,7 @@ closed are listed underneath with what closed them.
 |---|---|
 | Whether solenoid 2 fires at all, or is only inferred from `0x1754` | Observed. Completing a drop-target bank lights the ESPECIAL lamp; collecting it at the *rampa especial* awards a credit and gates 4028 output 1, on both sets. What remains open is only which coil sits on that output — item 1 above |
 | Which contacts fire the two EXPULSOR coils on 53/3311 | The contact drawing and the parts list: they are the two slingshots (*rechazadores*), contacts 24 and 25, both wired in parallel onto AD0 = switch 11 (§7.4). Not the *rampa especial* lanes |
-| `supstarfa`'s extra adjustment zones | Ten of them, not sixteen; walked on the machine, each one's NVRAM byte and range established, and eight of the ten effects measured by changing the value (§8, `vpx-table-reference.md` §5.1.1). Zones 13 and 19 are not among them and stay open — items 9 and 10 above |
+| `supstarfa`'s extra adjustment zones | Ten of them, not sixteen; walked on the machine, each one's NVRAM byte and range established, and all ten effects measured by changing the value (§8, `vpx-table-reference.md` §5.1.1). Zones 13 and 19 were the last two, measured later — items 9 and 10 above |
 | Whether set 2 plays a complete game | It does, and so does set 1. `tools/rfranco_game.py` plays coin → credit → start → ball served → scoring → ball 1/2/3 → game over → final score held, and asserts on lamps, coils and digits at each step |
 | Whether the harness's "error path" figure could be trusted | Superseded: the debugger endpoints take `&cpu=N` and the harness asserts on machine state instead |
 
