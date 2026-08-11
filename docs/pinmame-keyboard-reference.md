@@ -93,7 +93,7 @@ chords are listed because two of them (23, 24) have no other way in.
 | 24 | `W`+`F` | — | lifts the **test** door switch (§5) |
 | 25 | `W`+`G` | `5` | MONEDERO 25 PTS. — 25 pta coin |
 | 26 | `W`+`H` | `3` | MONEDERO 100 PTS. — 100 pta coin |
-| 27 | `W`+`J` | `Home` | CAIDA DE BOLAS — ball drain / outhole |
+| 27 | `W`+`J` | `Backspace` | CAIDA DE BOLAS — ball drain / outhole |
 | 28 | `W`+`K` | `1` | PULSADOR PARTIDAS — start button |
 
 **Use the dedicated keys for 25–28.** The chord for a coin latches the contact
@@ -149,7 +149,7 @@ second chord to release it.
 | `5` | 25 | 25 pta coin. The driver turns the key press into a one-shot pulse, which is what the ROM demands. |
 | `3` | 26 | 100 pta coin. Same one-shot. (`3`, not the usual `6` — the driver binds it explicitly.) |
 | `1` | 28 | Start button. Also the "advance" button inside every operator menu. |
-| `Home` | 27 | Drain — puts the ball back in the trough and ends the ball. |
+| `Backspace` | 27 | Drain — puts the ball back in the trough and ends the ball. Deliberately **not** `Home`, which is Slam Tilt in ~35 other drivers. |
 | `Insert` | — | Falta (tilt). Not a matrix switch: it raises RST 6.5 on the CPU. Level-triggered, so hold it. |
 | `Left Shift` / `Right Shift` | — | Flipper buttons. Not CPU-driven on this machine — they only drive the synthesised flipper solenoids. |
 
@@ -173,7 +173,7 @@ keyboard-specific version.
 2. **Switch 27 must be closed at rest.** *Caída de bolas* is closed whenever a
    ball is sitting in the trough, and both the game-start path and the fault
    recovery require it. The driver sets it at power-on and manages it from there:
-   firing SALIDA BOLAS opens it, `Home` closes it. Toggling it with `W`+`J` writes
+   firing SALIDA BOLAS opens it, `Backspace` closes it. Toggling it with `W`+`J` writes
    the matrix bit behind the driver's back and the two states drift apart.
 
 3. **Release momentary contacts.** Because the chords latch, a bumper or rollover
@@ -186,7 +186,7 @@ keyboard-specific version.
 
 4. **A ball that has not scored is not counted.** Draining a ball that has touched
    nothing since it was served does not advance the ball number — the game serves
-   the same ball again. Score something before pressing `Home`.
+   the same ball again. Score something before pressing `Backspace`.
 
 ---
 
@@ -286,7 +286,7 @@ that file to get back to defaults.
   Q+S   Q+S        right bumper
   E+D              left drop target 1 down        (level - leave it closed)
   Q+D   Q+D        ... and pulse the bank contact
-  Home             drain                          -> bonus paid, next ball
+  Backspace        drain                          -> bonus paid, next ball
 ```
 
 `tools/rfranco_game.py` plays this sequence and asserts on it for both ROM sets,
@@ -310,7 +310,7 @@ dump of `coreGlobals.swMatrix`.
   `0x10` of row 2 (switch 25) and took the credit display from 0 to 1; `3` raised
   `0x20` (switch 26); `1` raised `0x80` (switch 28). All three fell again on their
   own, confirming the coin one-shot.
-* **`Home`.** With the ball in play and the trough reading open, `Home` closed
+* **`Backspace`.** With the ball in play and the trough reading open, the drain key closed
   switch 27.
 * **`Insert` and `W`+`A`.** Either one latched `C01C` to `0xFF`, lit lamp 11
   (*luz falta*) and filled all thirty digits with the 7447's pattern for 14 —
