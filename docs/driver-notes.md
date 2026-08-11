@@ -4,8 +4,13 @@ Recreativos Franco (Spain), *Super Star*, 1986. New driver plus five fixes to th
 shared Intel 8085 CPU core.
 
 Files: `src/wpc/rfranco.c`, `src/wpc/rfranco.h`, `src/wpc/rfrancogames.c`,
-`src/cpu/i8085/i8085.c`, `src/cpu/i8085/i8085.h`, plus one line each in
-`src/pinmame.mak` and `src/wpc/driver.c`.
+`src/cpu/i8085/i8085.c`, `src/cpu/i8085/i8085.h`, plus two lines each in
+`src/pinmame.mak` (`rfranco.o` in `DRVLIBS`, `rfrancogames.o` in `PINGAMES`) and
+`src/wpc/driver.c` (`DRIVERNV(supstarf)`, `DRIVERNV(supstarfa)`), and the same
+three source names in the per-file build lists under `vcproj/` and `cmake/`. The
+`vcproj/` half is commit `4e8283e1`: `src/wpc/driver.c` is in every project, so
+without it the MSVC builds compiled everything and then failed to link
+`driver_supstarf` / `driver_supstarfa`.
 
 Companion documents: `hardware-findings.md` (the full derivation and its audit
 trail), `vpx-table-reference.md` (switch/lamp/solenoid tables),
@@ -329,7 +334,9 @@ Before/after over the same 5 s window:
 | `0x196B` | TRAP handler RET | 34 | 176 |
 | `0x0286` | error path | 67 | 0 |
 
-**The guard timeout is not derived from anything.** It is currently 100 µs.
+**The guard timeout is not derived from anything.** It is currently 1000 µs
+(`RFRANCO_SOUND_GUARD_US`, `rfranco.c:165`; a literal 100 µs until commit
+`a655aa50`, which is the figure earlier revisions of this document quoted).
 500 µs was measured as behaving correctly and 50 ms as much worse (the main CPU
 stalls long enough to distort game timing). If the guard fires before the 8035
 has collected a byte, the main CPU is released early and reads a stale reply —
@@ -355,12 +362,16 @@ This is not hypothetical. `0x0102` in the sound ROM is `ORL P2,#0FFH` and fires
 once per TRAP, which made the 8085's main loop look like it was running when it
 was in fact wedged.
 
-It still affects the regression harness: `tools/rfranco_check.py` instruments
-`0x0286` (the "error path") with no `cpu` filter, and `0x0286` in the sound ROM is
-`MOV A,R5` inside a live voice-setup routine. The harness's "error path never
-taken" failure of ~3 hits per 8 s is therefore **not trustworthy as recorded** —
-it needs re-running with `&cpu=0`. The other four points (`0x1800`, `0x2437`,
-`0x189C`, `0x196B`) are all above `0x1000` and are unambiguous.
+It cost the harness a false failure, and that one is now closed.
+`tools/rfranco_check.py` used to instrument `0x0286` (the "error path") with no
+`cpu` filter, and `0x0286` in the sound ROM is `MOV A,R5` inside a live
+voice-setup routine, so its "error path never taken" check reported ~3 hits per
+8 s against a main CPU that had never been there. The debugger endpoints now
+take `&cpu=N`, every request the tools make passes `&cpu=0`
+(`tools/rfranco_check.py:125` and `:211`), and the harness no longer instruments
+`0x0286` at all — it asserts on machine state instead. The four points it does
+instrument (`0x1800`, `0x2437`, `0x189C`, `0x196B` on set 1) are all above
+`0x1000` and were unambiguous either way.
 
 ### Do not sample before the machine has settled
 
@@ -373,7 +384,9 @@ phantom regression was chased on the strength of one.
 `tools/rfranco_check.py` detects the settle programmatically rather than sleeping,
 and then deliberately takes a *fresh* window, because the window that detects the
 settle straddles the transition and still carries startup counts. Typical settle
-is 75–80 s of wall clock.
+is **~25 s** of wall clock; it was 75–80 s until the harness learned to wait on
+the credit display before enabling the PC hook — see the Update at the end of
+this document.
 
 ---
 
@@ -424,9 +437,15 @@ host CPU, but nothing has tested it.
   zero-initialised tail. Correct in both build types (index 15 is zero either
   way), but in a `MAME_DEBUG` build nibbles `0x0A`-`0x0E` render as letters
   where a 7447 would not.
+* `supstarfa`'s zone 13 (`C7F4`) reads from the ROM as the per-game extra-ball
+  limit — `0x0CBC` compares `C7F4 - 1` against `C7F7`, the count already awarded
+  this game — but has not been isolated behaviourally: the same path is gated a
+  few instructions later on the free-running counter at `C006`, and repeated
+  trials at each setting did not separate the limit from that. The reading
+  stands on the disassembly alone. See `hardware-findings.md` §15.9.
 * `supstarfa`'s zone 19 (`C7FD`) is understood as far as the instruction it
   gates but its visible effect has not been isolated. See
-  `hardware-findings.md` §15.
+  `hardware-findings.md` §15.10.
 
 ### 7.5 Closed since the last revision of this document
 
@@ -609,7 +628,7 @@ both sets still pass `tools/rfranco_check.py` and `tools/rfranco_game.py`.
 | A complete game plays on both sets | `tools/rfranco_game.py --rom all`: coin → credit → start button lamp → start → SALIDA BOLAS → JUGADOR 1 and BOLA 1 lamps → eight playfield contacts each scoring → both drop-target banks lighting their ESPECIAL lamps → collecting one awards a credit and gates the knocker → ball 1/2/3 each ending with its bonus and each being re-served → FIN DE JUEGO → the final score held into attract, with `C01C` still 0 |
 | Solenoid 2 fires on a replay award | Observed rather than inferred: the coil select taken off PSG1 port B reads 4028 output 1 at the same moment the credit appears, on both sets. Which coil is on that output is §7.1 |
 | The two *expulsores* are the slingshots | Manual page 3's contact drawing places contacts 24 and 25 inside the two bottom-corner triangles; the parts list names that mechanism *rechazador*; it is the only coil mechanism the driver board's JL connector does not account for, and there are two of them. The ROM's own contact test independently says 24+25 are paralleled onto AD0 |
-| `supstarfa` has ten extra operator zones, not sixteen | Walked on the machine: the BCD zone counter steps 9 → 10 and stops at 19, so six of the jump table's 25 entries are unreachable. Each new zone's NVRAM byte, range and effect were then established by changing the value and measuring the difference |
+| `supstarfa` has ten extra operator zones, not sixteen | Walked on the machine: the BCD zone counter steps 9 → 10 and stops at 19, so six of the jump table's 25 entries are unreachable. Each new zone's NVRAM byte and displayed range were read off the machine while walking the menu, and eight of the ten effects were then established by changing the value and measuring the difference. **Zones 13 and 19 are the exceptions**: both rest on the disassembly alone and neither was isolated behaviourally — see `hardware-findings.md` §15.9 and §15.10, and §7.4 above |
 
 Not verified against real hardware: nothing here has been checked on a physical
 machine. Everything is derived from the factory manual, the two ROM images and the
@@ -678,8 +697,10 @@ attract streams, so the 8279 model is not implicated either way.
 ### Sound is verified by listening, not only by register writes
 
 Register capture (`tools/rfranco_sound.py`) decodes the AY programming for each
-command; every note lands within 25 cents of equal temperament, the worst being
-the ROM's own integer-period rounding.
+command; every note in the three decoded commands lands within 25 cents of equal
+temperament, the worst being the ROM's own integer-period rounding. That is
+**not** true of the whole 64-entry table: index 63 is +47.7 cents (see
+`sound-rom-map.md`).
 
 | command | decoded |
 |---|---|
@@ -700,7 +721,21 @@ plus four an octave up. A4 = period 120 = **exactly 440.000 Hz** at 844800 Hz.
 
 ### One ROM bug, faithfully emulated
 
-Sound 0xB1's second and third sub-tunes (0x598, 0x535) are unreachable: the tune
-terminator at 0x28B does `ANL PSW,#F8`, zeroing SP and discarding the
-`CALL 0x585` return. Only the first sub-tune plays, and the capture confirms it.
-Worth checking on hardware before anyone "fixes" it.
+Sound `0xB1`'s handler at `0x6D8` calls three tune launchers in turn - `0x585`,
+`0x598`, `0x535`. Only the first ever plays. The tune terminator at `0x28B`
+(`MOV A,PSW / ANL A,#F8 / MOV PSW,A`, not a single `ANL PSW` opcode - there is no
+such instruction in MCS-48) zeroes the PSW's stack-pointer field, so the return
+address the `CALL` at `0x6D8` pushed is discarded and `0x6DA` onwards is never
+reached.
+
+Settled rather than inferred, by static tracing and by cycle-accurate emulation:
+command `0xB1` runs 48 186 machine cycles against the 48 184 that sub-tune 1
+alone takes in isolation, and the executed-PC set contains `0x6D8` but never
+`0x6DA`. Since the discard is the ROM's own instruction sequence, a real 8035
+does the same - this is a ROM bug, not an emulation artefact, and "fixing" it
+would make the driver wrong.
+
+Two details in the earlier wording were off. The discarded call is **at** `0x6D8`
+and **targets** `0x585`; there is no `CALL` instruction at `0x585`. And `0x535`
+is **not** dead - it is reachable through commands `0x31` and `0xF0`. Only
+`0x598` is unreachable. Full derivation in `sound-rom-map.md` §6.

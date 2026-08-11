@@ -20,6 +20,16 @@ project several wrong conclusions, including a phantom regression that was
 chased for hours. So we poll until the invariants hold rather than guessing how
 long to wait.
 
+BUILD DEPENDENCY: one check needs a MAME_DEBUG build. The fault fill check reads
+back the glyph the ROM's 0xEE fill produces, and `core_bcd2seg7[0x0E]` is 0x79
+only when MAME_DEBUG is defined (core.c:137-143); without it the table's tail is
+zero-initialised and the fill renders as blank digits, indistinguishable from
+the legitimately blank score displays in attract. REMOTE_DEBUG=1 (this HTTP API)
+and DEBUG=1 (MAME_DEBUG) are independent make flags, so an HTTP-enabled release
+build would pass that check for ever without ever looking at anything. The build
+is therefore probed at run time - see seg7_has_letters - and the check is
+reported as unavailable, loudly, rather than passing vacuously.
+
 Exit code 0 = all checks passed, 1 = a check failed, 2 = could not run.
 """
 import argparse
@@ -32,7 +42,7 @@ import time
 import urllib.error
 import urllib.request
 
-PINMAME = "/code/superstar/pinmame"
+PINMAME = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pinmame")
 BINARY = os.path.join(PINMAME, "xpinmamed.x11")
 ROMPATH = os.path.join(PINMAME, "roms")
 PORT = 8931
@@ -73,6 +83,7 @@ FALTA = 0xC01C
 # writes 0xEE to every display RAM byte (set 1 at 0x2A11, set 2 at 0x2A1A), so
 # a screen full of this glyph means the ROM has faulted, not that the display
 # model is broken. Worth checking explicitly: it is what a fault looks like.
+# Only meaningful in a MAME_DEBUG build - see seg7_has_letters and the docstring.
 EE_FILL = 0x0079
 
 SETTLE_TIMEOUT = 300      # seconds of wall clock before giving up
@@ -81,6 +92,8 @@ SETTLE_TOLERANCE = 0.05   # counts must agree within 5%
 SP_SLACK = 0x0400         # how far below the reset value we tolerate
 SEG_CREDIT_UNITS = 33     # segment index of the credit units digit
 SEVEN = [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F]
+PC_SAMPLES = 12           # PC samples per liveness window
+PC_WINDOW = 3.0           # seconds those samples are spread over
 
 
 def api(path, timeout=5):
@@ -112,6 +125,49 @@ def rom_word(addr):
 def segments():
     s = api("info")["segments"]
     return [int(s[i * 4:i * 4 + 4], 16) for i in range(len(s) // 4)]
+
+
+def seg7_has_letters(api_get):
+    """Does this build render nibbles 0x0A-0x0E as letters, or as nothing?
+
+    `core_bcd2seg7[]` only carries entries 0x0A-0x0E `#ifdef MAME_DEBUG`
+    (core.c:137-143); in a release build the tail is zero-initialised, so the
+    ROM's 0xEE fault fill comes out as blank digits rather than as E glyphs and
+    EE_FILL never appears. Nothing about the HTTP API says which build this is -
+    REMOTE_DEBUG and DEBUG are separate flags in makefile.unix - so probe it.
+
+    The probe is the disassembler, which the same MAME_DEBUG controls:
+    `i8085_dasm()` (i8085.c:1840) returns the real mnemonic only in a debug
+    build and otherwise prints the raw byte and reports a length of one. Address
+    0x0000 is the reset vector's `LXI SP`, three bytes wide on both sets, so a
+    reported size of 1 means the disassembler - and hence the seg7 table's
+    letters - was compiled out.
+
+    Takes the caller's api() so the other harnesses can use it on their own port.
+    """
+    line = api_get("debugger/dasm?addr=0000&lines=1&cpu=0")["lines"][0]
+    return line["size"] > 1
+
+
+def sample_pcs(api_get, cpu, samples=PC_SAMPLES, window=PC_WINDOW):
+    """One CPU's PC, sampled repeatedly across a window, in order.
+
+    Two samples in quick succession are not enough to prove a CPU is running.
+    The 8085 spends much of every TRAP pass stalled on the 8212 READY trigger
+    and the rest of it in short loops, and the 8035 idles in a four instruction
+    loop at 0x2E3-0x2E7 - measured, two samples 0.4s apart landed on the same
+    8035 address 4 times in 25 on a perfectly healthy machine. So spread the
+    samples out and ask whether the PC is ever anything else, which is what a
+    wedged CPU cannot manage.
+
+    Takes the caller's api() so the other harnesses can use it on their port.
+    """
+    pcs = []
+    for i in range(samples):
+        pcs.append(api_get("debugger/state")["cpus"][cpu]["pc"])
+        if i + 1 < samples:
+            time.sleep(window / (samples - 1))
+    return pcs
 
 
 def measure(points, window):
@@ -169,6 +225,18 @@ def run(rom, verbose):
                   f"(LXI SP,{rom_word(0x0001):04X} TRAP->{rom_word(0x0025):04X})",
                   file=sys.stderr)
             return 2
+
+        # Which build is this? One check below depends on it, and a build that
+        # cannot make that check is worth saying out loud rather than quietly
+        # reporting seven checks as eight.
+        seg7_letters = seg7_has_letters(api)
+        if not seg7_letters:
+            print("\n" + "!" * 72)
+            print("WARNING: this is not a MAME_DEBUG build (make ... DEBUG=1).")
+            print("core_bcd2seg7[0x0A-0x0E] is empty here, so the ROM's 0xEE fault")
+            print("fill renders as blank digits and the fault-fill check below")
+            print("cannot be made. The suite is one check weaker than it looks.")
+            print("!" * 72 + "\n")
 
         # Cheap first phase: no instrumentation, so the emulator runs at full
         # speed. The credit units digit reading 0 is the first thing that can
@@ -249,10 +317,19 @@ def run(rom, verbose):
         # screen of E glyphs. Checked separately from C01C because it is the
         # symptom a person actually sees, and because it also catches the 8279
         # model getting stuck on a stale fill for any other reason.
-        segs = segments()
-        ee = sum(1 for v in segs[:34] if v == EE_FILL)
-        ok &= check("display is not sitting on the fault fill",
-                    ee == 0, f"{ee} of 34 digits at the 0xEE fill")
+        #
+        # Skipped rather than faked in a release build: there the fill renders
+        # as 0x0000, which is also what a blank digit renders as, and the score
+        # displays are legitimately blank in attract. Passing it there would be
+        # asserting that a glyph nothing can produce is absent.
+        if seg7_letters:
+            segs = segments()
+            ee = sum(1 for v in segs[:34] if v == EE_FILL)
+            ok &= check("display is not sitting on the fault fill",
+                        ee == 0, f"{ee} of 34 digits at the 0xEE fill")
+        else:
+            print("  [--] display is not sitting on the fault fill: NOT CHECKED, "
+                  "needs a MAME_DEBUG build")
 
         # 4. stack has not run away
         sp = api("debugger/state")["cpus"][0]["sp"]
@@ -260,14 +337,21 @@ def run(rom, verbose):
                     s["sp_reset"] - SP_SLACK <= sp <= s["sp_reset"],
                     f"SP=0x{sp:04X} (reset 0x{s['sp_reset']:04X})")
 
-        # 5. both CPUs alive
-        a = api("debugger/state")["cpus"]
-        time.sleep(0.5)
-        b = api("debugger/state")["cpus"]
-        ok &= check("main CPU executing", a[0]["pc"] != b[0]["pc"] or True,
-                    f"pc=0x{b[0]['pc']:04X}")
-        ok &= check("sound CPU executing", a[1]["pc"] != b[1]["pc"],
-                    f"pc=0x{a[1]['pc']:03X} -> 0x{b[1]['pc']:03X}")
+        # 5. both CPUs alive. This is the check a regression in the 8212 READY
+        # stall path would trip: a main CPU left in cpu_spinuntil_trigger with
+        # nobody to release it keeps its PC on the instruction that stalled it
+        # for ever, while the TRAP counters above can still look plausible.
+        # Hence a window of samples and "not always the same value" rather than
+        # a single before/after pair, which repeats often enough on a healthy
+        # machine to be useless - see sample_pcs.
+        main = sample_pcs(api, 0)
+        ok &= check("main CPU executing", len(set(main)) > 1,
+                    f"{len(set(main))} distinct PCs in {len(main)} samples over "
+                    f"{PC_WINDOW:.0f}s, last 0x{main[-1]:04X}")
+        snd = sample_pcs(api, 1)
+        ok &= check("sound CPU executing", len(set(snd)) > 1,
+                    f"{len(set(snd))} distinct PCs in {len(snd)} samples over "
+                    f"{PC_WINDOW:.0f}s, last 0x{snd[-1]:03X}")
 
         # 6. a coin must be accepted and shown. This exercises the whole
         # chain at once: the switch matrix, the coin path through the sound

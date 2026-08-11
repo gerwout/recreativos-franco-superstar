@@ -703,14 +703,23 @@ through the standard PinMAME mechanics flag:
 
 | `Controller.HandleMechanics` | Who drives switch 27 |
 |---|---|
-| `&HFF` (VPinMAME's default) | The driver opens the contact when SALIDA BOLAS fires; **your table must close it on drain and at power-on.** |
-| `0` | Nobody but you. The driver never touches the contact — your ball physics own it end to end. |
+| `&HFF` (VPinMAME's default) | The driver seeds the contact **closed** at reset (`rfranco.c:1023`, written into the matrix by the switch handler at `rfranco.c:913`) and opens it when SALIDA BOLAS fires; **your table must close it on drain.** Closing it at power-on as well is harmless, not required — the driver has already done it. |
+| `0` | Nobody but you. The driver never touches the contact — your ball physics own it end to end, power-on included. |
+
+Note which way round the default falls: VPinMAME sets the flag to `&HFF` unless
+your table changes it (`src/win32com/Controller.cpp:186`, copied into the global
+at `ControllerRun.cpp:102`), so out of the box PinMAME owns the mechanics.
+libpinmame is the one that defaults to `0` (`src/libpinmame/libpinmame.cpp:31`);
+the standalone build matches VPinMAME (`src/wpc/core.c:90`).
 
 Ball position is a mechanical property, so the driver treats it the way core.c
 treats every other mech: gated on `g_fHandleMechanics`. Set
 `Controller.HandleMechanics = 0` in `Table1_Init` if you want your trough logic
-to be the only thing writing that bit; leave it alone and the driver will do the
-opening half for you. Either way you close it on drain.
+to be the only thing writing that bit; leave it alone and the driver seeds the
+contact closed at reset and does the opening half for you. Either way you close
+it on drain: the driver's own drain path is the DRAIN key on the keyboard, and
+VPinMAME clears `g_fHandleKeyboard` (`Controller.cpp:185`), so `core.c:1780`
+hands the switch handler no input ports at all.
 
 *Measured with the flag off:* the contact is not touched at power-on, and a front
 end driving switch 27 itself gets an entirely normal game — coin, start, kicker,
@@ -720,7 +729,10 @@ A table that leaves the flag at its default plumbs it like this:
 
 ```vbscript
 Sub Table1_Init
-    Controller.Switch(27) = True    ' a ball rests in the outhole
+    Controller.Switch(27) = True    ' a ball rests in the outhole. Harmless at
+                                    ' the default - the driver already closed it
+                                    ' at reset - and required if you ever set
+                                    ' HandleMechanics = 0
 End Sub
 
 Sub SolBallRelease(enabled)
@@ -944,4 +956,8 @@ appear in the test on their own.
 * `pinmame-keyboard-reference.md` — the same switches from the other end: which
   key closes which contact in standalone PinMAME, and how to reach the ROM's own
   zone 9 contact test.
+* `sound-rom-map.md` — the sound ROM mapped byte by byte, with the tune format
+  and every sound command.
+* `questions-for-a-real-machine.md` — what is still unsettled, and what to ask
+  someone with a physical machine.
 * `rom-provenance.md` — ROM sets, hashes, and the `supstarfa` BAD_DUMP case.

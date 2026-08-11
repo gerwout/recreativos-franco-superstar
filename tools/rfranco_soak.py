@@ -17,6 +17,12 @@ Contacts are pulsed, never held. Two reasons: a coin held closed for more than
 closed for about 128 game-loop passes trips the stuck-contact watchdog, which is
 also by design. Both are real machine behaviour and neither is what this is
 looking for.
+
+BUILD DEPENDENCY: the "display not on the fault fill" check needs a MAME_DEBUG
+build, for the reason set out in `rfranco_check.py`'s docstring - the 0xEE fill
+only renders as E glyphs when `core_bcd2seg7[0x0E]` is filled in. The build is
+probed at run time (`seg7_has_letters`, imported from that harness) and the
+check is reported as unavailable, loudly, rather than passing on its own.
 """
 import argparse
 import os
@@ -30,10 +36,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from rfranco_game import (Machine, Report, BINARY, ROMPATH, ROMS,   # noqa: E402
                           SW_COIN25, SW_DRAIN, SW_START, L_BALL, L_GAMEOVER,
                           L_START, S_BALLREL)
+# Shared with the health harness rather than copied: the fill glyph and the
+# build condition it depends on are one fact, and two copies can only drift.
+from rfranco_check import EE_FILL, seg7_has_letters, sample_pcs   # noqa: E402
 
 PORT = 8937
 FALTA = 0xC01C
-EE_FILL = 0x0079
 SP_SLACK = 0x0400
 SP_RESET = {"supstarf": 0xC7FF, "supstarfa": 0xC7CF}
 
@@ -45,24 +53,33 @@ PLAYFIELD = [11, 12, 13, 14, 15, 16, 17, 18,
              41, 42, 43, 44, 45, 46, 47]
 
 
-def health(m, rom, rep, tag):
+def health(m, rom, rep, tag, seg7_letters=True):
     ok = True
     falta = m.mem(FALTA)[0]
     ok &= rep.check("%s: fault handler not latched" % tag, falta == 0,
                     "C01C=0x%02X" % falta)
-    segs = m.segments()
-    ee = sum(1 for v in segs[:34] if v == EE_FILL)
-    ok &= rep.check("%s: display not on the fault fill" % tag, ee == 0,
-                    "%d of 34 digits" % ee)
+    if seg7_letters:
+        segs = m.segments()
+        ee = sum(1 for v in segs[:34] if v == EE_FILL)
+        ok &= rep.check("%s: display not on the fault fill" % tag, ee == 0,
+                        "%d of 34 digits" % ee)
+    else:
+        # In a release build the fill renders as 0x0000, which is also a blank
+        # digit, so there is nothing here to assert on. Say so rather than pass.
+        print("  [--] %s: display not on the fault fill: NOT CHECKED, "
+              "needs a MAME_DEBUG build" % tag)
     sp = m.api("debugger/state")["cpus"][0]["sp"]
     base = SP_RESET[rom]
     ok &= rep.check("%s: stack near its reset value" % tag,
                     base - SP_SLACK <= sp <= base, "SP=0x%04X" % sp)
-    a = m.api("debugger/state")["cpus"]
-    time.sleep(0.4)
-    b = m.api("debugger/state")["cpus"]
-    ok &= rep.check("%s: sound CPU executing" % tag, a[1]["pc"] != b[1]["pc"],
-                    "pc 0x%03X -> 0x%03X" % (a[1]["pc"], b[1]["pc"]))
+    # Sampled across a window rather than compared before and after: the 8035
+    # idles in a four instruction loop, so a single pair matches often enough to
+    # have failed this harness on a healthy machine (measured 4 times in 25 at
+    # 0.4s apart). See sample_pcs in rfranco_check.py.
+    snd = sample_pcs(m.api, 1)
+    ok &= rep.check("%s: sound CPU executing" % tag, len(set(snd)) > 1,
+                    "%d distinct PCs in %d samples, last 0x%03X"
+                    % (len(set(snd)), len(snd), snd[-1]))
     return ok
 
 
@@ -147,9 +164,16 @@ def run(rom, games, seed, verbose):
         time.sleep(5)
         m.watch_solenoids()
 
+        seg7_letters = seg7_has_letters(m.api)
+        if not seg7_letters:
+            print("\n" + "!" * 72)
+            print("WARNING: this is not a MAME_DEBUG build (make ... DEBUG=1).")
+            print("The fault-fill check below cannot be made - see the docstring.")
+            print("!" * 72 + "\n")
+
         rep = Report()
         print("soaking %s: %d games, seed %d" % (rom, games, seed))
-        health(m, rom, rep, "before")
+        health(m, rom, rep, "before", seg7_letters)
         started = 0
         ballsum = 0
         t0 = time.time()
@@ -172,7 +196,7 @@ def run(rom, games, seed, verbose):
                   "%d/%d" % (started, games))
         rep.check("balls advanced during the soak", ballsum > games,
                   "%d ball numbers seen across %d games" % (ballsum, games))
-        health(m, rom, rep, "after")
+        health(m, rom, rep, "after", seg7_letters)
         print("\n%s: %s" % (rom, "PASS" if rep.ok else "FAIL"))
         return 0 if rep.ok else 1
     finally:

@@ -39,7 +39,7 @@ import time
 import urllib.error
 import urllib.request
 
-PINMAME = "/code/superstar/pinmame"
+PINMAME = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pinmame")
 BINARY = os.path.join(PINMAME, "xpinmamed.x11")
 ROMPATH = os.path.join(PINMAME, "roms")
 PORT = 8932

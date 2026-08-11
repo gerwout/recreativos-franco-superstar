@@ -17,6 +17,8 @@ the disagreement is called out.
 | `vpx-table-reference.md` | Visual Pinball table authors — the switch, lamp, solenoid and display tables |
 | `pinmame-keyboard-reference.md` | Driving the machine by hand in standalone PinMAME — which key closes which switch |
 | `driver-notes.md` | PinMAME reviewers — architecture summary, the 8085 core fixes, open items |
+| `sound-rom-map.md` | The 2532 sound ROM byte by byte: every address classified, all 256 commands mapped, the tune format and catalogue |
+| `questions-for-a-real-machine.md` | The handful of things only a physical board can settle, written for whoever is standing at one |
 | `rom-provenance.md` | ROM sets, hashes, revision order, the MAME `BAD_DUMP` case |
 
 Analysis artifacts live in `../ghidra/out/`. Regenerate with:
@@ -532,7 +534,8 @@ state rather than add blink logic of its own.
 
 **Emulation consequence.** A lamp is gated for an ~85 µs slot and then stays lit
 for the rest of the half-cycle. Sampling instantaneously reports nothing useful;
-the driver accumulates selects into `lampAcc[7]` and commits them at each TRAP.
+the driver accumulates selects into `lampAcc[CORE_STDLAMPCOLS]` — eight columns,
+`core.h:338` — and commits them at each TRAP (`rfranco.c:219`).
 
 ## 7. Coils
 
@@ -886,7 +889,9 @@ Every TRAP now completes, and SP holds a narrow band instead of walking down.
 
 The guard timeout is sensitive and has no derivation: 500 µs was measured as
 behaving correctly, 50 ms as much worse (the main CPU stalls long enough to
-distort game timing). The driver currently uses 100 µs. See §15.
+distort game timing). The driver currently uses 1000 µs
+(`RFRANCO_SOUND_GUARD_US`, `rfranco.c:165`); it was a literal 100 µs until commit
+`a655aa50`, which is the figure this section carried before. See §15.
 
 ## 12. Timing constants and how each was established
 
@@ -897,8 +902,8 @@ distort game timing). The driver currently uses 100 µs. See §15.
 | 8035 clock | 168 960 | XTAL/2 pin frequency ÷ 15 machine cycles; MCS-48 core wants machine cycles |
 | PSG clock | 844 800 | 8035 T0 = XTAL/6; corroborated by the ROM's tone table (§9.4) |
 | Interleave | 500 | empirical, raised for the sound handshake before READY was modelled; re-test |
-| READY guard | 100 µs | **not derived** — see §15 |
-| RST 7.5 rate | 400 Hz | **a guess, and currently unused** — see §15 |
+| READY guard | 1000 µs | **not derived** — `RFRANCO_SOUND_GUARD_US`, `rfranco.c:165`; see §15 |
+| RST 7.5 rate | *none* | the driver never asserts RST 7.5 and has no constant for it. `RFRANCO_RST75FREQ`, a guessed 400 Hz that nothing read, was removed in `a655aa50`; the reason the line is deliberately not driven is `rfranco.c:148` and §3 |
 
 ## 13. Measurement caveats
 
@@ -914,7 +919,9 @@ Concrete example that cost real time: `0x0102` in the sound ROM is
 `ORL P2,#0FFH` and fires once per TRAP, which made the 8085's main loop look like
 it was running when it was in fact wedged.
 
-It still affects the harness — see §14.
+It also cost the harness a false failure — instrumenting `0x0286` without a CPU
+filter — which is closed: §14 records what fixed it. Every request the tools make
+now carries `&cpu=0`.
 
 ### Do not sample before the machine has settled
 
@@ -923,7 +930,9 @@ machine in reset while it does; the game's own startup runs well past that.
 Readings taken during that window look alarming and mean nothing. This produced
 an entire phantom regression that was chased for hours (§18.2).
 
-Typical settle is 75–80 s of wall clock.
+Typical settle is **~25 s** of wall clock. It was 75–80 s until the harness
+learned to wait on the credit display before enabling the PC hook — see the
+Update at the end of this document.
 
 ## 14. Regression harness (`tools/rfranco_check.py`)
 
@@ -985,8 +994,8 @@ closed are listed underneath with what closed them.
    between the `STA` and the `SIM` the interrupt is lost and the `HALT` never
    wakes. Not observed in any soak so far, but structurally possible; newer MAME
    re-checks.
-4. **Sound command semantics** beyond the six understood ones (§9.2). Sound ROM
-   coverage is ~42% of the code region.
+4. **Sound command semantics** - *closed*. All 256 command values are mapped and
+   every one of the ROM's 4096 bytes is classified; see `sound-rom-map.md`.
 5. **The upper 2 KB of the sound ROM** (`0x800`–`0xFFF`) holds only four distinct
    byte values. Genuine, not a dump artefact; purpose unknown.
 6. **The `FLIPPER` relay (IC7 code 5)** is never energised by the ROM, but the
@@ -1022,7 +1031,7 @@ closed are listed underneath with what closed them.
 |---|---|
 | Whether solenoid 2 fires at all, or is only inferred from `0x1754` | Observed. Completing a drop-target bank lights the ESPECIAL lamp; collecting it at the *rampa especial* awards a credit and gates 4028 output 1, on both sets. What remains open is only which coil sits on that output — item 1 above |
 | Which contacts fire the two EXPULSOR coils on 53/3311 | The contact drawing and the parts list: they are the two slingshots (*rechazadores*), contacts 24 and 25, both wired in parallel onto AD0 = switch 11 (§7.4). Not the *rampa especial* lanes |
-| `supstarfa`'s extra adjustment zones | Ten of them, not sixteen; walked on the machine and each one's NVRAM byte, range and effect established (§8, `vpx-table-reference.md` §5.1.1) |
+| `supstarfa`'s extra adjustment zones | Ten of them, not sixteen; walked on the machine, each one's NVRAM byte and range established, and eight of the ten effects measured by changing the value (§8, `vpx-table-reference.md` §5.1.1). Zones 13 and 19 are not among them and stay open — items 9 and 10 above |
 | Whether set 2 plays a complete game | It does, and so does set 1. `tools/rfranco_game.py` plays coin → credit → start → ball served → scoring → ball 1/2/3 → game over → final score held, and asserts on lamps, coils and digits at each step |
 | Whether the harness's "error path" figure could be trusted | Superseded: the debugger endpoints take `&cpu=N` and the harness asserts on machine state instead |
 
@@ -1148,7 +1157,8 @@ fixed:
    shift on "a `SIM` happened since the last clock". **That workaround is itself
    now superseded**: the 74164 is reloaded from scratch every frame and only ever
    committed when `LOAD` pulses, so the switch scan's clocks disturb it
-   harmlessly. `locals.simSinceClock` survives in the driver as dead state.
+   harmlessly. `locals.simSinceClock` was left behind as write-only state and
+   has since been deleted (`029fc0e5`); nothing in the driver carries it now.
 3. **Bit alignment.** Nine `OUT`/`RAL`/`SIM` per frame; the first `OUT` has no
    `SIM` before it and clocks in the stale trailing level from the previous frame.
    Dropping the leading bit lands the byte correctly.
@@ -1164,18 +1174,29 @@ debugger's switch dump was not a straight dump of `swMatrix[]`.
 made the numbering the driver's own choice and the confusion disappeared. Switches
 are now `11`–`48` on the `column*10 + row + 1` scheme.
 
-The related note remains true and is worth keeping: the driver's `SWITCH_UPDATE`
+The related note that used to be kept here — that the driver's `SWITCH_UPDATE`
 writes row 2 from the input port every frame, so cabinet switches injected by the
-debugger are overwritten — drive those through the input port instead. (Under
-VPinMAME the opposite applies, because `SWITCH_UPDATE` does not run at all there;
-see `driver-notes.md` §7.1.)
+debugger are overwritten, and that under VPinMAME the opposite applies because
+`SWITCH_UPDATE` does not run at all there — is wrong in both halves and is
+superseded.
+
+`SWITCH_UPDATE` is edge-driven since `3a3121bc` (`rfranco.c:832`): nothing writes
+a cabinet-row bit unless that bit is changing on the driver's own side, so an
+injected switch survives until something deliberately changes it. And it does run
+under VPinMAME — `core.c:1780` is
+`coreData->updSw(g_fHandleKeyboard ? inports : NULL)`, which calls the handler
+with a null port pointer rather than skipping it. That is why the trough model,
+the coin one-shot and *falta* were moved outside the handler's `if (inports)`
+block: they are exactly the parts that have to work with `inports == NULL`. See
+`driver-notes.md` §7A and `vpx-table-reference.md` §6.1.1.
 
 ## 21. The "remaining work" list
 
 Superseded wholesale. Display decode, lamp mapping, switch mapping and solenoids
 were all listed as not started; all four are implemented and documented in
-Part II. The `0x4000` placeholder is gone (§16). Sound ROM coverage at ~42%
-remains open and is carried forward as §15.4.
+Part II. The `0x4000` placeholder is gone (§16). Sound ROM coverage, once carried
+forward as an open item at ~42%, is now closed: `sound-rom-map.md` classifies all
+4096 bytes and maps all 256 command values.
 
 
 ---
@@ -1230,8 +1251,9 @@ attract streams, so the 8279 model is not implicated either way.
 ### Sound is verified by listening, not only by register writes
 
 Register capture (`tools/rfranco_sound.py`) decodes the AY programming for each
-command; every note lands within 25 cents of equal temperament, the worst being
-the ROM's own integer-period rounding.
+command; every note in the three decoded commands lands within 25 cents of equal
+temperament, the worst being the ROM's own integer-period rounding - but **not**
+every entry of the 64-value table: index 63 is +47.7 cents.
 
 | command | decoded |
 |---|---|

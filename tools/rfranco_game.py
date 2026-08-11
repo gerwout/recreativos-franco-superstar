@@ -9,7 +9,12 @@ held. Everything it asserts on is read back out of the running machine, either
 from the segment map or from the lamp/solenoid matrices, so a pass means the
 driver really produced it.
 
-    tools/rfranco_game.py [--rom supstarf|supstarfa|all] [--players N] [--verbose]
+    tools/rfranco_game.py [--rom supstarf|supstarfa|all] [--players 1..4] [--verbose]
+
+`--players N` coins up N credits, presses start N times and then plays all N
+players through every ball. The machine takes the turns in the order ball 1 for
+each player, ball 2 for each player, and so on, so with N players and B balls
+there are N*B turns to drain - the run takes proportionally longer.
 
 Exit code 0 = all checks passed, 1 = a check failed, 2 = could not run.
 
@@ -21,6 +26,21 @@ from outside:
   * The ball trough (caida de bolas, switch 27) is a level, not a pulse. Close
     it to drain; the driver opens it again by itself when the game fires SALIDA
     BOLAS, because that is what the real outhole kicker does.
+
+KNOWN GAP: `g_fHandleMechanics == 0` is not covered, and cannot be from here.
+The trough model above is gated on that flag (rfranco.c:695, commit b4be2cef) so
+that a front end with its own ball physics owns switch 27 instead. Standalone
+PinMAME fixes the flag at 0xff (core.c:90) and offers no command line, rc file
+or debugger route to change it - the only writer in the whole build is the P-ROC
+path (core.c:2502), which needs PROC_SUPPORT compiled in and real hardware. So
+the gated-off branch is only reachable from VPinMAME (Controller.HandleMechanics
+= 0) or libpinmame (which defaults it to 0), and a regression that broke it
+would not show up here. What this harness does cover is the half of the contract
+that is testable either way: the driver only touches the contact on the two
+events, never re-asserting it frame by frame, so a front end's own value
+survives in between - see the last check in play(). Closing the gap properly
+needs a way to set the flag from outside, which would be a driver/core change
+and is deliberately not made here.
 """
 import argparse
 import json
@@ -111,6 +131,13 @@ class Machine(object):
     def lamps(self):
         return set(l["num"] for l in self.api("lamps")["lamps"] if l["active"])
 
+    def switch(self, num):
+        """One switch as the driver currently holds it, not as it was written."""
+        for s in self.api("switches")["switches"]:
+            if s["num"] == num:
+                return s["active"]
+        return None
+
     def mem(self, addr, size=1):
         return self.api("debugger/memory?addr=%04X&size=%d&cpu=0" % (addr, size))["data"]
 
@@ -191,9 +218,12 @@ class Report(object):
         print("      %s" % text)
 
 
-def play(m, rep, balls_expected, verbose):
-    """One complete game: coin, start, score, drain each ball, game over."""
-    fired = []
+def play(m, rep, balls_expected, players, verbose):
+    """One complete game: coin, start, score, drain every turn, game over."""
+
+    def active_players():
+        d = m.display()
+        return [p for p in (1, 2, 3, 4) if d["p%d" % p].strip().isdigit()]
 
     # --- attract -----------------------------------------------------------
     lamps = m.lamps()
@@ -214,11 +244,37 @@ def play(m, rep, balls_expected, verbose):
     rep.check("start button lamp lit with a credit (lamp %d)" % L_START,
               lit, "lamps %s" % sorted(m.lamps()))
 
+    # One credit per player. Coin until there are enough rather than dropping
+    # one coin per player: the machine does not pay one credit for one coin -
+    # measured on set 1 from cold NVRAM, the fourth 25 pta coin paid two.
+    while (m.credits() or 0) < players:
+        cr = m.credits() or 0
+        m.pulse(SW_COIN25, 150)
+        if not m.wait(lambda: (m.credits() or 0) > cr, timeout=20):
+            break
+    after = m.credits()
+    if players > 1:
+        rep.check("enough credits for %d players" % players,
+                  (after or 0) >= players, "credits %s" % after)
+
     # --- start -------------------------------------------------------------
     got = m.press_until(SW_START, lambda: m.display()["p1"].strip() == "0")
     rep.check("start button starts a game", got, "player 1 display %r" % m.display()["p1"])
-    rep.check("the credit is taken", m.credits() == (after - 1),
-              "credits %s -> %s" % (after, m.credits()))
+
+    # Extra players are added by pressing start again once the game is running -
+    # the ROM keeps taking them through ball 1 - and each one takes a further
+    # credit and brings up its own score display at 0.
+    for n in range(2, players + 1):
+        got = m.press_until(SW_START,
+                            lambda n=n: m.display()["p%d" % n].strip() == "0")
+        rep.check("start press %d adds player %d" % (n, n), got,
+                  "player %d display %r" % (n, m.display()["p%d" % n]))
+    if players > 1:
+        act = active_players()
+        rep.check("exactly %d player displays are active" % players,
+                  act == list(range(1, players + 1)), "active %s" % act)
+    rep.check("a credit is taken per player", m.credits() == (after - players),
+              "credits %s -> %s for %d player(s)" % (after, m.credits(), players))
 
     got = m.wait(lambda: S_BALLREL in m.fired(clear=False), timeout=60)
     f = m.fired()
@@ -280,54 +336,88 @@ def play(m, rep, balls_expected, verbose):
     rep.check("... and bangs the knocker (sol %d)" % S_KNOCKER,
               S_KNOCKER in f, "solenoids %s" % sorted(set(f)))
 
-    # --- play the balls out ------------------------------------------------
+    # --- play the turns out ------------------------------------------------
+    # The machine's turn order, watched on a four player game: every player
+    # takes ball 1, then every player takes ball 2, and so on. The JUGADOR lamp
+    # steps 12 -> 13 -> 2 -> 3 with BOLA 1 (31) lit throughout and only then
+    # returns to 12 with BOLA 2 (32), so the next turn is identified by both
+    # lamps together - the ball lamp alone does not move for N-1 of N drains.
+    #
     # The end-of-ball bonus is the avance ladder, so build some of it up on
-    # each ball before draining: the two lower rollovers step it.
+    # each turn before draining: the two lower rollovers step it.
+    turns = [(b, p) for b in range(1, balls_expected + 1)
+             for p in range(1, players + 1)]
     bonuses = []
-    before_drain = m.score(1)
-    for ball in range(1, balls_expected):
+    before_drain = {p: None for p in range(1, players + 1)}
+    before_drain[1] = m.score(1)
+    for i, (ball, player) in enumerate(turns[:-1]):
+        nball, nplayer = turns[i + 1]
         m.fired()
         m.sw(SW_DRAIN, 1)
-        nxt = ball + 1
-        got = m.wait(lambda: L_BALL.get(nxt) in m.lamps(), timeout=STEP_TIMEOUT)
-        rep.check("ball %d ends, BOLA %d lamp (%d) lights" % (ball, nxt, L_BALL[nxt]),
+        got = m.wait(lambda: L_BALL.get(nball) in m.lamps()
+                     and L_PLAYER[nplayer] in m.lamps(), timeout=STEP_TIMEOUT)
+        rep.check("ball %d player %d ends -> ball %d player %d (lamps %d, %d)"
+                  % (ball, player, nball, nplayer, L_BALL[nball], L_PLAYER[nplayer]),
                   got, "lamps %s" % sorted(m.lamps()))
         f = m.fired()
-        rep.check("ball %d served (sol %d)" % (nxt, S_BALLREL), S_BALLREL in f,
-                  "solenoids %s" % sorted(set(f)))
-        s = m.score(1)
-        bonuses.append(None if (s is None or before_drain is None) else s - before_drain)
-        rep.check("score does not go backwards across ball %d -> %d" % (ball, nxt),
-                  s is not None and before_drain is not None and s >= before_drain,
-                  "score %s -> %s (end of ball bonus %s)" % (before_drain, s, bonuses[-1]))
-        # play the new ball a little, and step the avance ladder
+        rep.check("ball %d player %d served (sol %d)" % (nball, nplayer, S_BALLREL),
+                  S_BALLREL in f, "solenoids %s" % sorted(set(f)))
+        s = m.score(player)
+        was = before_drain[player]
+        bonuses.append(None if (s is None or was is None) else s - was)
+        rep.check("player %d's score does not go backwards over ball %d"
+                  % (player, ball),
+                  s is not None and was is not None and s >= was,
+                  "score %s -> %s (end of ball bonus %s)" % (was, s, bonuses[-1]))
+        # Play the new turn a little, and step the avance ladder. Not only
+        # cosmetic: a ball that has not scored since it was served does not
+        # count, the ROM simply serves it again, so every turn has to score at
+        # least once before there is any point draining it.
         for sw in (11, 17, 31, 32, 45, 46):
             m.pulse(sw, 300)
             time.sleep(0.6)
-        before_drain = m.score(1)
+        before_drain[nplayer] = m.score(nplayer)
 
-    # --- last ball, game over ---------------------------------------------
+    # --- last turn, game over ----------------------------------------------
+    ball, player = turns[-1]
     m.fired()
     m.sw(SW_DRAIN, 1)
     got = m.wait(lambda: L_GAMEOVER in m.lamps(), timeout=STEP_TIMEOUT)
     rep.check("last ball ends the game (FIN DE JUEGO, lamp %d)" % L_GAMEOVER,
               got, "lamps %s" % sorted(m.lamps()))
-    final = m.score(1)
-    bonuses.append(None if (final is None or before_drain is None)
-                   else final - before_drain)
+    final = m.score(player)
+    was = before_drain[player]
+    bonuses.append(None if (final is None or was is None) else final - was)
     rep.check("final score is held on the display",
-              final is not None and before_drain is not None and final >= before_drain,
-              "score %s (last bonus %s)" % (final, bonuses[-1]))
+              final is not None and was is not None and final >= was,
+              "player %d score %s (last bonus %s)" % (player, final, bonuses[-1]))
     rep.check("an end-of-ball bonus was paid",
-              any(b for b in bonuses if b), "per-ball bonus %s" % bonuses)
+              any(b for b in bonuses if b), "per-turn bonus %s" % bonuses)
     lamps = m.lamps()
     rep.check("no BOLA lamp left lit after the game",
               not (set(L_BALL.values()) & lamps), "lamps %s" % sorted(lamps))
+    scores = dict((p, m.score(p)) for p in range(1, players + 1))
     time.sleep(3)
-    rep.check("the score survives into attract", m.score(1) == final,
-              "score %s" % m.score(1))
+    held = dict((p, m.score(p)) for p in range(1, players + 1))
+    rep.check("the scores survive into attract", held == scores,
+              "%s -> %s" % (scores, held))
     rep.check("the fault handler never latched", m.mem(0xC01C)[0] == 0,
               "C01C=0x%02X" % m.mem(0xC01C)[0])
+
+    # --- who owns the trough -----------------------------------------------
+    # The trough model is gated on g_fHandleMechanics, which nothing here can
+    # set - see the module docstring for that gap. What is testable is the
+    # property the gate is built on: the driver drives switch 27 from the two
+    # ball EVENTS only (SALIDA BOLAS gating, and the drain), never re-asserting
+    # it frame by frame, so a front end that writes the contact itself keeps
+    # its value in between. Done last and in attract, because opening the
+    # trough while the ROM wants a ball in it is its own kind of test.
+    m.sw(SW_DRAIN, 0)
+    time.sleep(0.5)
+    stayed = m.wait(lambda: m.switch(SW_DRAIN) != 0, timeout=5) is None
+    rep.check("an external write to the trough contact is not overwritten",
+              stayed, "switch %d held open for 5s in attract" % SW_DRAIN)
+    m.sw(SW_DRAIN, 1)          # put the ball back where the ROM expects it
     return final
 
 
@@ -363,10 +453,11 @@ def run(rom, players, verbose):
         balls = m.mem(balls_addr)[0]
         if not 1 <= balls <= 5:
             balls = 3
-        print("balls per game (zone 1, %04X) = %d\n" % (balls_addr, balls))
+        print("balls per game (zone 1, %04X) = %d, %d player(s), %d turns\n"
+              % (balls_addr, balls, players, balls * players))
 
         rep = Report()
-        play(m, rep, balls, verbose)
+        play(m, rep, balls, players, verbose)
         print("\n%s: %s" % (rom, "PASS" if rep.ok else "FAIL"))
         return 0 if rep.ok else 1
     finally:
@@ -379,7 +470,9 @@ def run(rom, players, verbose):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rom", default="supstarf", choices=list(ROMS) + ["all"])
-    ap.add_argument("--players", type=int, default=1)
+    # Four score displays, so four players; the ROM stops lighting the start
+    # button lamp once the fourth has been added.
+    ap.add_argument("--players", type=int, default=1, choices=(1, 2, 3, 4))
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
     if not os.path.exists(BINARY):

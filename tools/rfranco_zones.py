@@ -46,8 +46,12 @@ SEVEN = {0x3F: '0', 0x06: '1', 0x5B: '2', 0x4F: '3', 0x66: '4', 0x6D: '5',
          0x7D: '6', 0x07: '7', 0x7F: '8', 0x6F: '9', 0x00: ' ', 0x79: 'E'}
 
 # Where each ROM keeps the zone number the menu is showing, and the NVRAM
-# window the extra zones live in. Both established from the dispatchers
-# (set 1 0x3228, set 2 0x3255) rather than assumed.
+# window the extra zones live in. Both established from the menu dispatcher
+# rather than assumed. It is at 0x3255 in BOTH sets - the menu entry loads the
+# zone counter with 1 at 0x3262 and the dispatcher reads it back at 0x3272,
+# where set 1 bounds it with CP 0x0A and set 2 with CP 0x1A. That bound is where
+# set 2's extra zones come from; how many of them the counter actually reaches
+# is a question for this script.
 SETS = {
     "supstarf":  {"zone": 0xC01D, "nv": (0xC1E9, 0x30), "extra": None},
     "supstarfa": {"zone": 0xC01D, "nv": (0xC1EA, 0x30), "extra": (0xC7F0, 0x10)},
@@ -139,10 +143,12 @@ def run(rom, steps, as_json):
             print("FAIL: debugger did not come up", file=sys.stderr)
             return 2
 
-        # The menu is entered from the boot dispatch at 0x00BB, so both door
-        # switches have to be up before the ROM gets there. The debugger comes
-        # up long before that in wall clock terms - the machine needs tens of
-        # seconds of it to finish starting - so just hold them from now on.
+        # The menu is entered from the boot dispatch - set 1 0x00BB, set 2
+        # 0x00BF, the ANI 0xC0 on the cabinet byte the ROM has just fetched with
+        # sound command 0xEE - so both door switches have to be up before the
+        # ROM gets there. The debugger comes up long before that in wall clock
+        # terms - the machine needs tens of seconds of it to finish starting -
+        # so just hold them from now on.
         for _ in range(20):
             sw(SW_AJUSTE_UP, 1)
             sw(SW_TEST_UP, 1)
