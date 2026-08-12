@@ -140,7 +140,7 @@ JM3 and onto JN2.
 | 45 | IC5 C | JN8 | PASILLO SUPERIOR DERECHO | Upper right lane | upper right | manual contact 2 |
 | 46 | IC5 B | JN7 | PASILLO SUPERIOR IZQUIERDO | Upper left lane | upper left | manual contact 1 |
 | 47 | IC5 A | JN2 | PICABOLAS | Spinner / ball chopper | centre playfield | Moved here by the *Fe de erratas* (JM3 → JN2). Awards the *especial picabolas*. |
-| 48 | IC5 SER | JN1 | — | — | — | **Unused.** IC5's floating serial input. The driver masks it out of the shift chain, so writing it does nothing — the ROM can never see it and the zone-9 phantom contact it used to produce cannot happen. Still: leave it open. |
+| 48 | IC5 SER | JN1 | — | — | — | **Unused.** IC5's floating serial input. The driver masks it out of the shift chain, so writing it does nothing. Leave it open. |
 
 **Drop targets.** Contact closed = target **down**. A completed bank is "all five
 closed". The bank-level contacts (13 / 15) are separate wires from the individual
@@ -222,12 +222,8 @@ on the running machine: lamp 11 is *luz falta*, 12 *jugador 1º*, 21 *avance
 10000*, 31 *bola 1ª*, 36 *fin de juego*, 45 *pulsador partidas* and 52 *especial
 izquierda*, each lighting exactly when it should.
 
-One past defect worth knowing about if a table was authored against an
-earlier build: `Controller.ChangedLamps` used to report every lamp one column
-high (column 0 as 11–18, column 7 as 81–88), because the driver's `m2lamp`
-missed that the core passes it a one-based column. `vp_getLamp` was always
-right. Fixed in the driver; the numbers in this section are what both paths
-now report.
+`Controller.ChangedLamps` and `vp_getLamp` both report these numbers —
+verified against each other on the running machine.
 
 The game does its own flashing (it keeps separate "force on" and "force off"
 overlay tables and merges them on alternate frames), so a table should follow the
@@ -625,7 +621,7 @@ the game did differently.
 | 10 | `C7F1` | 0 / 1 | 1 | **Collecting the LEFT special resets the left bank.** With 1, hitting *rampa especial izquierda* (switch 14) while lamp 52 is lit fires BANCADA IZQUIERDA (solenoid 7) and puts lamp 52 out as well as awarding the replay. With 0 the lamp stays lit and the bank is not reset. Set 1 has no equivalent — it behaves like 0. |
 | 11 | `C7F2` | 0 / 1 | 1 | The same for the **RIGHT** special: switch 16, lamp 42, BANCADA DERECHA (solenoid 9). Measured both ways — with 1 the bank reset fires and lamp 42 goes out, with 0 only the knocker and the credit. |
 | 12 | `C7F3` | 0 / 1 | 1 | **Collecting the PICABOLAS special resets the avance ladder.** With 1 it drops back to 10 000, the *avance doble/triple* lamps go out and ESPECIAL PICABOLAS is extinguished. With 0 all three survive. |
-| 13 | `C7F4` | 1–9 | 1 | **Maximum consecutive extra balls on one ball in play** — measured, and two earlier readings corrected on the way. The extra ball is offered when the avance ladder steps into the rung held in `C1F9` (the zone-2 extra-ball threshold, default 6 = 60 000), not on every completed *diana*: `0x0CBC` then compares `C7F4 - 1` against `C7F7`, the extra balls already collected this turn, and the `RC` at `0x0CC4` abandons the offer once the count has reached the limit. Measured at every boundary by forcing `C1F9`, the ladder and `C7F7` through the debugger and completing a *diana*: (`C7F4`,`C7F7`) = (1,0), (3,1) and (3,2) armed a BOLA EXTRA DIANA lamp, (1,1) and (3,3) were refused with the hit counter past the `RC` unmoved. The `C006` read after it is *not* a second gate — its sign only picks the side, lamp 53 (left) or lamp 43 (right); one lamp armed on every pass. Completing the bank under the lit lamp collects it — `C7F7` steps up at `0x0C4A`, LUZ BOLA EXTRA (lamp 37) lights — and the drain then replays the same ball number. Not per game: `0x123D` zeroes `C7F7` at every end of ball that is not an extra-ball replay (measured 3 → 0), so at the default of 1 the player can earn one extra ball on every ball. |
+| 13 | `C7F4` | 1–9 | 1 | **Maximum consecutive extra balls on one ball in play** — measured. The extra ball is offered when the avance ladder steps into the rung held in `C1F9` (the zone-2 extra-ball threshold, default 6 = 60 000), not on every completed *diana*: `0x0CBC` then compares `C7F4 - 1` against `C7F7`, the extra balls already collected this turn, and the `RC` at `0x0CC4` abandons the offer once the count has reached the limit. Measured at every boundary by forcing `C1F9`, the ladder and `C7F7` through the debugger and completing a *diana*: (`C7F4`,`C7F7`) = (1,0), (3,1) and (3,2) armed a BOLA EXTRA DIANA lamp, (1,1) and (3,3) were refused with the hit counter past the `RC` unmoved. The `C006` read after it is *not* a second gate — its sign only picks the side, lamp 53 (left) or lamp 43 (right); one lamp armed on every pass. Completing the bank under the lit lamp collects it — `C7F7` steps up at `0x0C4A`, LUZ BOLA EXTRA (lamp 37) lights — and the drain then replays the same ball number. Not per game: `0x123D` zeroes `C7F7` at every end of ball that is not an extra-ball replay (measured 3 → 0), so at the default of 1 the player can earn one extra ball on every ball. |
 | 14 | `C7F5` | 30000–90000 | 30000 | **Score for completing a *diana*** (either drop-target bank). Set 1 awards a hard-coded 30 000 from the same instruction. |
 | 15 | `C7F6` | 100–9800 | 1000 | **Score for the 100 PUNTOS lane** (switch 17). BCD × 100. Set 1 pays 100 for the same contact, so this is the most visible difference between the two sets in ordinary play. |
 | 16 | `C7F8` | 10–20 | 15 | **Maximum credits a replay may take the machine to.** Set 1 has this fixed at 20. The knocker still bangs when the credit is refused. The *coin* path has its own separate limit of 10 and does not consult this. |
@@ -806,9 +802,8 @@ anything.
 
 ### 6.1.1 The driver will not fight you for a switch
 
-Worth knowing because the driver used to do the opposite. Nothing in
-`SWITCH_UPDATE` writes a cabinet-row bit unless that bit is changing on the
-driver's own side — a keyboard key moving, or a coin one-shot starting or
+Nothing in `SWITCH_UPDATE` writes a cabinet-row bit unless that bit is changing
+on the driver's own side — a keyboard key moving, or a coin one-shot starting or
 expiring. It does not rebuild the row every frame. So a switch your table sets
 stays set until your table clears it, which is what you want, and which is what
 makes the coin/start sequence work reliably from outside the keyboard.
@@ -830,8 +825,8 @@ did not ask for.
 
 Also:
 
-* **Leave switch 48 open.** It is a floating shift-register input; setting it
-  makes the zone-9 contact test report a phantom contact.
+* **Switch 48 is not a contact** — it is a floating shift-register input the
+  driver masks out. Writing it does nothing; leave it open.
 * The ROM never reads switches 21–24, which is why the driver borrows three of
   them: 21 is *falta* (§1.5), 23 and 24 are the operator door switches (§5.1).
   22 does nothing.
