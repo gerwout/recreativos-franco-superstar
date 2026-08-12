@@ -11,7 +11,6 @@ manual-images/
 
 # ROM images are not redistributable
 romdumps/
-roms/*.zip
 __pycache__/
 
 # Reference video of the real machine - large, not ours to redistribute

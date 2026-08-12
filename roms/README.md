@@ -6,7 +6,7 @@ are interchangeable with MAME's.
 
 ## Contents
 
-### `supstarf.zip` — set 1 (recommended)
+### `supstarf.zip` — rev. 1
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|
@@ -15,7 +15,7 @@ are interchangeable with MAME's.
 
 Both files match MAME's `supstarf` definitions exactly.
 
-### `supstarfa.zip` — set 2
+### `supstarfa.zip` — rev. 2 (recommended)
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|
