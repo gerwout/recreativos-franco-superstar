@@ -1,8 +1,11 @@
 # Super Star (Recreativos Franco, 1986) — Visual Pinball table-author reference
 
 PinMAME driver: `src/wpc/rfranco.c` / `rfranco.h` / `rfrancogames.c`
-ROM sets: `supstarf` (set 1, 9 operator adjustment zones — the revision the factory
-manual documents), `supstarfa` (set 2, newer firmware, 19 zones)
+ROM sets: `supstarf` — "Super Star" (rev. 1, 9 operator adjustment zones; the
+revision the factory manual documents) and `supstarfa` — "Super Star (rev. 2)"
+(newer firmware: 19 zones, plus real fixes such as the inter-CPU wake race and
+the stuck-contact watchdog). In this document "set 1" and "set 2" refer to these
+two, matching the ROM-set names.
 
 Boards: CPU 53/3291 (8085A + 8035 sound + 2 x AY-3-8910), driver 53/3308,
 display 53/3307, PSU 53/3309, interconnect 53/3310, bumper/slingshot 53/3311.
@@ -48,6 +51,41 @@ Absences that will trip up a table author:
   (53/3311), straight from their playfield switches. The CPU never commands
   them; the driver synthesises solenoids 17–20 so you have something to hang a
   sound and a flasher on — see §3.2.
+
+### 0.1 Loading it from a table script
+
+```vbscript
+Const cGameName = "supstarf"      ' rev. 1 - or "supstarfa" for rev. 2
+With Controller
+    .GameName = cGameName
+    .SplashInfoLine = "Super Star (Recreativos Franco 1986)"
+    ' .HandleMechanics = 0        ' only if your table owns the trough - see 6.1
+    .Run
+End With
+```
+
+There is no machine-specific `.vbs` helper; the driver needs nothing beyond the
+standard controller object. Pick the set with `cGameName`. Rev. 2 is the better
+default for play (it is what late machines ran); rev. 1 is the manual-exact
+original.
+
+### 0.2 Sound
+
+**All game audio comes out of the emulation** — two AY-3-8910s behind an 8035,
+emitted through VPinMAME's audio like any other solid-state machine. Chimes,
+tunes, the bumper cascade: do not re-create any of it in the table.
+
+What the machine cannot make is *mechanical* noise. Add samples only for:
+flippers, the pop bumpers and slingshots (solenoids 17-20 exist exactly for
+this), the drop-target bank resets (solenoids 7/9), the outhole kick
+(solenoid 10), the coin meters (4/5) and the knocker (2). The ball-start,
+scoring and special sounds are the ROM's job.
+
+### 0.3 General illumination
+
+There is none under CPU control. The playfield and backbox GI is wired straight
+to the transformer — it is on whenever the machine is on. Model it as always-lit;
+there is no GI relay to follow and no dimming.
 
 ---
 
@@ -959,6 +997,8 @@ appear in the test on their own.
 ---
 
 ## Related documents
+
+* `vpx-table-reference.es.md` — this document in Spanish.
 
 * `driver-notes.md` — for PinMAME reviewers: architecture, the 8085 core fixes,
   known driver gaps.
