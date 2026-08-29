@@ -20,7 +20,15 @@ the disagreement is called out.
 | `game-rom-map.md` | The 27128 game ROM byte by byte: every address classified in both sets, the sound-command census, the driver-gap judgement |
 | `sound-rom-map.md` | The 2532 sound ROM byte by byte: every address classified, all 256 commands mapped, the tune format and catalogue |
 | `questions-for-a-real-machine.md` | The handful of things only a physical board can settle, written for whoever is standing at one |
-| `rom-provenance.md` | ROM sets, hashes, revision order, the MAME `BAD_DUMP` case |
+| `rom-provenance.md` | ROM sets, hashes, the sound ROM's reproduced failure modes, the MAME `BAD_DUMP` case |
+| `rom-revision-chain.md` | The four game-ROM revisions, what each one changed, and the evidence for their order |
+
+**A note on "set 1" and "set 2".** This document, like `game-rom-map.md` and
+`vpx-table-reference.md`, was written when only two game ROMs were known and uses
+those names throughout. Four revisions exist; set 1 is rev. 1 and set 2 is
+rev. **4**. The two dumped since (`supstarfb`, `supstarfc`) sit between them and
+carry set 1's hardware behaviour — same NVRAM window, same sound interface, same
+switch wiring — so nothing below changes. See `rom-revision-chain.md`.
 
 Analysis artifacts live in `../ghidra/out/`. Regenerate with:
 
@@ -676,10 +684,11 @@ The ROM dispatches on them at boot (`0x00BB`) **and re-reads them live inside th
 menus**, which is the part that matters for driving the machine from outside: in
 AJUSTES, both switches still up makes the start button step the current zone's
 *value* and either one put back down makes it step to the next *zone* (set 1
-`0x3380`/`0x33BC`, set 2 `0x3383`/`0x33BF`). A DIP setting cannot be moved while
-the machine runs, so the driver also exposes the two switches on the spare
-cabinet bits — switch 23 lifts *ajuste*, switch 24 lifts *test* — ANDed into the
-DIP value so that both open changes nothing.
+`0x3380`/`0x33BC`, set 2 `0x3383`/`0x33BF`). A setting that only applies at
+power-on cannot express that, so the driver models the pair as two ordinary
+switches — 1 is *ajuste* and 2 is *test*, closed meaning up — which can be moved
+at any time from the keyboard, a front end or the debug API. See
+`driver-notes.md` §7B.
 
 Set 1 has 9 adjustment zones; set 2 has **19**, numbered 1–9 and 10–19. Its jump
 table at `0x349D` carries 25 entries, which is where the "25 zones" figure in

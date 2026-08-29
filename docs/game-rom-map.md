@@ -1,15 +1,28 @@
 # Recreativos Franco "Super Star" — game ROM (IC19), complete byte map
 
-Two firmware revisions, one 27128 each, plain 8085 binaries (no scrambling):
+Four firmware revisions, one 27128 each, plain 8085 binaries (no scrambling):
 
 ```
-set 1  supstarf   m31-a-01187.ic19  16384 bytes  sha1 496d3c9664386ae64e94462db2fdd36811a68a87
-set 2  supstarfa  27c128.ic19       16384 bytes  sha1 e2f8dcf95084f755d3a34d77ba2649602687a610
+rev. 1  supstarf   m31-a-01187.ic19  16384 bytes  sha1 496d3c9664386ae64e94462db2fdd36811a68a87
+rev. 2  supstarfc  27128Prg.bin      16384 bytes  sha1 efdf60b53ac105985ca6d4eeb6ed48b893bb7ad8
+rev. 3  supstarfb  super.dat         16384 bytes  sha1 d10c6456716ca49cce590996e7271b8cd7026f38
+rev. 4  supstarfa  27c128.ic19       16384 bytes  sha1 e2f8dcf95084f755d3a34d77ba2649602687a610
 ```
+
+**This document maps the first and last of the four**, which it calls set 1 and
+set 2 throughout — the names they had when it was written, and still their MAME
+names. Read "set 1" as rev. 1 and "set 2" as rev. 4.
 
 Set 1 is mapped completely, byte by byte. Set 2 is mapped as a structured diff
 against set 1 — the two are the same program with insertions — plus a full
 classification of the set-2-only material. Addresses are set 1 unless marked.
+
+Revs. 2 and 3 were dumped later and sit *between* those two. They are byte-
+aligned to set 1's layout and inherit its map unchanged apart from the
+insertions listed in `rom-revision-chain.md`, which also carries the evidence
+for the ordering and a per-revision changelog. Two of the changes §6.2 and §6.3
+below attribute to set 2 in fact entered the line earlier: the TRAP sentinel in
+rev. 2 and the bounded sender spin in rev. 3. Set 2 inherited both.
 
 ## 0. Method, and what is measured vs. inferred
 
@@ -703,10 +716,22 @@ undocumented region, §6.4–§6.6).
 
 ## 9. Files
 
-Working artifacts (scratch, reproducible from the ROMs + this document):
-`trace85.py` (tracer), `anno_sf.json`/`anno_fa.json` (computed-jump
-resolutions), `mapdef_sf.py`/`mapdef_fa.py` + `build_map.py` (the verified
-byte maps), `align.py`/`align_out.txt` (the instruction-level diff),
+The disassembler, tracer and instruction-level aligner are committed as
+`../tools/dis85.py` and `../tools/rom_diff.py`. Everything in this document that
+depends on them can be regenerated:
+
+```bash
+tools/rom_diff.py inventory                  # hashes, sizes, checksum scheme
+tools/rom_diff.py coverage                   # the byte-count check in §0
+tools/rom_diff.py sound                      # the command census in §3
+tools/rom_diff.py matrix                     # the revision ordering
+tools/rom_diff.py hunks OLD NEW              # every changed hunk, disassembled
+tools/rom_diff.py shifts OLD NEW             # NVRAM/code address remapping
+```
+
+Still scratch, not committed, and reproducible from the ROMs plus this document:
+`anno_sf.json`/`anno_fa.json` (computed-jump resolutions),
+`mapdef_sf.py`/`mapdef_fa.py` + `build_map.py` (the verified byte maps),
 `scanflow.py` (I/O and idiom census), `soundcode.py` (the sound-ROM overlap
 ranges), `cover.py`/`deep.py` + `cov/*.json` (the dynamic sessions),
 `compare_cov.py` (the static/dynamic reconciliation).

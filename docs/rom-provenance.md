@@ -6,6 +6,14 @@ Two complete, verified sets. File names and set names follow MAME's
 Built sets live in `../roms/`; the source dumps in `../romdumps/`. The build
 recipe is in `../roms/README.md`.
 
+> **Superseded in part.** Two further IC19 revisions have since been dumped
+> (`77C43E87` and `51697AFF`, from `romdumps/super_star_setC.zip` and
+> `romdumps/super_star_rev3.zip`). There are **four** firmware revisions, and the
+> two documented here are the first and the last of the chain — so "set 2" below
+> is rev. **4**, not rev. 2. Everything this document says about those two images
+> and about the sound ROM still holds; the ordering claim in §2 is still correct
+> as far as it goes. See `rom-revision-chain.md` for the full four-way analysis.
+
 ---
 
 ## 1. The two sets

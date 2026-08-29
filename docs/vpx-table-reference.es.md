@@ -3,12 +3,22 @@
 *Traduccion del documento vpx-table-reference.md; la version inglesa es la de referencia.*
 
 Driver de PinMAME: `src/wpc/rfranco.c` / `rfranco.h` / `rfrancogames.c`
-ROM sets: `supstarf` — «Super Star» (rev. 1, 9 zonas de ajuste de operador; la
-revisión que documenta el manual de fábrica) y `supstarfa` — «Super Star
-(rev. 2)» (firmware más nuevo: 19 zonas, más correcciones reales como la
-condición de carrera en el despertar entre CPUs y el watchdog de contactos
-pegados). En este documento «set 1» y «set 2» se refieren a estos dos,
-coincidiendo con los nombres de los ROM sets.
+ROM sets: `supstarf` — «Super Star» (9 zonas de ajuste de operador; la revisión
+que documenta el manual de fábrica) y `supstarfa` — «Super Star (rev. 2)»
+(firmware más nuevo: 19 zonas, más correcciones reales como la condición de
+carrera en el despertar entre CPUs y el watchdog de contactos pegados). En este
+documento «set 1» y «set 2» se refieren a estos dos, coincidiendo con los
+nombres de los ROM sets.
+
+> Desde entonces se han volcado dos revisiones más, `supstarfb` y `supstarfc`.
+> Se sitúan **entre** estas dos en la cadena — el set 1 es la rev. 1 y el set 2
+> es la rev. **4** de cuatro — y el driver todavía no tiene entradas para ellas,
+> así que una mesa no puede seleccionarlas. Nada de este documento cambia: todo
+> lo que sigue describe el set 1 y el set 2 tal como se nombran. Las dos
+> revisiones nuevas se diferencian del set 1 únicamente en correcciones internas
+> (véase `rom-revision-chain.md`); conservan las nueve zonas de operador del
+> set 1 y su comportamiento de juego, así que una mesa escrita para el set 1
+> les sirve sin cambios.
 
 Placas: CPU 53/3291 (8085A + 8035 de sonido + 2 x AY-3-8910), driver 53/3308,
 display 53/3307, fuente de alimentación 53/3309, interconexión 53/3310,
@@ -35,13 +45,14 @@ marcadas.
 | Elemento | Cantidad | Números en VPX |
 |---|---|---|
 | Contactos de tablero / mueble | 4 bytes de hardware, 27 contactos reales | `11`–`18`, `21`–`28`, `31`–`38`, `41`–`48` |
+| Interruptores de puerta del operador | 2 | `1` (*ajuste*), `2` (*test*) — una pseudocolumna, véase §1.6 |
 | Falta (tilt) | 1 | **no es un switch de la matriz** — es una línea de interrupción, accesible cerrando el switch 21, véase §1.5 |
 | Lámparas | 8 columnas de matriz, 44 que pueden encenderse | `1`–`8`, `11`–`18`, … `71`–`74` (véase §2) |
 | Solenoides gobernados por la CPU | 8 de las 10 salidas del decodificador realmente usadas | `2`–`5`, `7`–`10` |
 | Solenoides sintetizados por el driver | 4 (bumpers y slingshots) | `17`–`20` |
 | Flippers | 2, no controlados por la CPU | botones `112` / `114` de entrada, solenoides `45`–`48` de salida |
 | Dígitos del display | 30 dígitos HDSP-3400 | índices de LED `0`–`33` (véase §4) |
-| Interruptores DIP | 2 usados de 16 | interruptores de puerta, véase §1.6 |
+| Interruptores DIP | ninguno | la máquina no tiene; los ajustes del operador viven en NVRAM, véase §5.1 |
 
 Ausencias que harán tropezar al autor de una mesa:
 
@@ -142,8 +153,8 @@ conector JC de la placa de CPU.
 |---|---|---|---|---|---|
 | 21 | PA0 | — | *(prestado)* FALTA (tilt) | mueble | No es un contacto real — el juego nunca lee este bit. El driver lo toma prestado para activar RST 6.5, que es como el péndulo de la falta llega a la CPU. Véase §1.5. |
 | 22 | PA1 | — | — | — | **Sin cablear, nunca se lee.** Libre. |
-| 23 | PA2 | — | *(prestado)* interruptor de AJUSTE subido | puerta de monedas | No es un contacto real — el juego nunca lee este bit. El driver lo toma prestado para que un front end pueda subir el interruptor de **ajuste** de la puerta con la máquina en marcha, cosa que el ajuste DIP no permite. Véase §5.1. |
-| 24 | PA3 | — | *(prestado)* interruptor de TEST subido | puerta de monedas | Lo mismo, para el interruptor de **test** de la puerta. |
+| 23 | PA2 | — | — | — | **Sin cablear, nunca se lee.** Libre. |
+| 24 | PA3 | — | — | — | **Sin cablear, nunca se lee.** Libre. |
 | 25 | PA4 | MONEDERO 25 PTS. | Monedero de 25 pta | puerta de monedas | **Obligatorio.** Debe ser un pulso corto — véase §6.1. |
 | 26 | PA5 | MONEDERO 100 PTS. | Monedero de 100 pta | puerta de monedas | **Obligatorio.** Debe ser un pulso corto — véase §6.1. |
 | 27 | PA6 | CAIDA DE BOLAS | Caída de bola / foso | foso | **Obligatorio, y debe leerse CERRADO en reposo** — véase §6.1. Contacto 28 del manual; la placa driver también rotula esta red como *contacto final partidas*. |
@@ -227,24 +238,35 @@ foso con la lámpara de falta aún encendida. Ese es el aspecto de una falta —
 también el del manejador de averías por cualquier otra causa, y por eso el §6.1
 dice que se lea `C01C` antes de sospechar del display.
 
-### 1.6 Interruptores de puerta del operador — DIP 1 y 2
+### 1.6 Interruptores de puerta del operador — switches 1 y 2
 
 Los dos interruptores de la puerta (*interruptor de ajuste*, *interruptor de
-test*) tampoco son switches de la matriz. Llegan como los bits 7/6 del puerto B
-de PSG2 y el driver los modela como los interruptores DIP 1–2
-(`core_getDip(0) & 0x03`). En VPX: `Controller.Dip(0)`.
+test*) tampoco están en ninguno de los cuatro bytes de hardware. Llegan como los
+bits 7/6 del puerto B de PSG2, y el driver les da una pseudocolumna propia: el
+mismo sitio donde los Williams System 4–11 tienen su puerta de monedas.
 
-| Valor DIP | Posición según el manual | Modo al que se entra al encender |
+| # | Bit | Nombre | Notas |
+|---|---|---|---|
+| 1 | PB7 | INTERRUPTOR DE AJUSTE | **Cerrado = subido.** Abierto en reposo. |
+| 2 | PB6 | INTERRUPTOR DE TEST | **Cerrado = subido.** Abierto en reposo. |
+
+En VPX: `Controller.Switch(1)` y `Controller.Switch(2)`, como cualquier otro
+switch. No hay ningún DIP de por medio — esta máquina no tiene ninguno.
+
+| Switch 1 (ajuste) | Switch 2 (test) | Modo al que se entra al encender |
 |---|---|---|
-| 0 | ambos bajados | **JUEGO** (juego normal) |
-| 1 | solo test subido | **TEST DE LUCES Y VISUALIZACION DE RAM** |
-| 2 | solo ajuste subido | **BORRADO DE DISPLAY Y CREDITOS** |
-| 3 | ambos subidos | **AJUSTES DE TANTEO Y TEST DE CONTACTOS** |
+| abierto | abierto | **JUEGO** (juego normal) |
+| abierto | cerrado | **TEST DE LUCES Y VISUALIZACION DE RAM** |
+| cerrado | abierto | **BORRADO DE DISPLAY Y CREDITOS** |
+| cerrado | cerrado | **AJUSTES DE TANTEO Y TEST DE CONTACTOS** |
 
-La ROM elige el modo en el arranque (despacho en `0x00BB`), así que entrar en
-un menú requiere un **reset** con el DIP ya puesto. Una vez dentro de un menú
-el DIP se relee en vivo, que es lo que hace funcionar la navegación de «baje el
-interruptor de ajuste, pulse partida».
+Ambos abiertos es la posición de reposo, así que una mesa que no los toque
+obtiene juego normal. La ROM elige el modo en el arranque (despacho en
+`0x00BB`), así que entrar en un menú requiere un **reset** con los interruptores
+ya puestos; su estado sobrevive a un reset suave, porque core solo limpia la
+matriz en un arranque en frío. Una vez dentro de un menú la pareja se relee en
+vivo, que es lo que hace funcionar la navegación de «baje el interruptor de
+ajuste, pulse partida».
 
 ---
 
@@ -643,10 +665,10 @@ player 2 (8-14)   credits (32-33)    player 4 (24-30)
 
 ## 5. Ajustes de operador, tests y auditorías
 
-Se accede con los dos interruptores de la puerta (§1.6 — DIP 1–2). El **botón
+Se accede con los dos interruptores de la puerta (§1.6 — switches 1 y 2). El **botón
 de partida (switch 28)** es el único control dentro de todos los menús.
 
-### 5.1 AJUSTES DE TANTEO Y TEST DE CONTACTOS (DIP = 3)
+### 5.1 AJUSTES DE TANTEO Y TEST DE CONTACTOS (ambos switches cerrados)
 
 Nueve zonas en `supstarf`. **El número de zona se muestra en el dígito de
 unidades del display de créditos** (índice de segmento 33).
@@ -656,10 +678,10 @@ Procedimiento según el manual:
 1. Apague la máquina.
 2. Suba ambos interruptores de puerta y encienda — se aterriza en la zona 1
    con su valor actual.
-3. Para pasar a otra zona: baje el interruptor de *ajuste* (DIP = 1) y pulse
+3. Para pasar a otra zona: baje el interruptor de *ajuste* (abra el switch 1) y pulse
    partida; cada pulsación avanza una zona.
 4. Para cambiar el valor de la zona actual: suba el interruptor de *ajuste*
-   (DIP = 3) y pulse partida; cada pulsación incrementa el valor.
+   (cierre otra vez el switch 1) y pulse partida; cada pulsación incrementa el valor.
 
 | Zona | Nombre en el manual | Descripción | Rango |
 |---|---|---|---|
@@ -720,7 +742,7 @@ operador las mueve: la zona 15 hace que el pasillo de 100 puntos pague 1 000
 donde el set 1 paga 100, y la zona 17 está activada por defecto, así que los
 bumpers pasan a 10 000 tras la primera diana completada.
 
-### 5.2 TEST DE LUCES Y VISUALIZACION DE RAM (DIP = 1)
+### 5.2 TEST DE LUCES Y VISUALIZACION DE RAM (switch 2 cerrado)
 
 Encienda con el interruptor de *test* subido y la máquina entra directamente en
 el test de luces: todas las bombillas de tablero y de frontón se encienden
@@ -759,7 +781,7 @@ display de jugador.
 | Jugador 3 | TOTAL PARTIDAS GRATIS MONEDAS DE 25 PTS. | Partidas gratis por el monedero de 25 pta |
 | Jugador 4 | TOTAL PARTIDAS GRATIS MONEDAS DE 100 PTS. | Partidas gratis por el monedero de 100 pta |
 
-### 5.3 BORRADO DE DISPLAY Y CREDITOS (DIP = 2)
+### 5.3 BORRADO DE DISPLAY Y CREDITOS (switch 1 cerrado)
 
 Encender en esta posición borra todos los créditos almacenados.
 
@@ -949,13 +971,13 @@ luego arranca con **todos los ajustes a cero**.
 las monedas sin dar crédito.** Antes de publicar una mesa, o en el primer
 arranque propio:
 
-1. Ponga los DIP 1–2 a `3` (ambos interruptores de puerta subidos) y resetee.
-2. Se aterriza en la zona 1 (bolas por partida). DIP = `3` + partida cambia el
-   valor; DIP = `1` + partida avanza a la zona siguiente.
+1. Cierre los switches 1 y 2 (ambos interruptores de puerta subidos) y resetee.
+2. Se aterriza en la zona 1 (bolas por partida). Ambos cerrados + partida cambia
+   el valor; abrir el switch 1 + partida avanza a la zona siguiente.
 3. Recorra las zonas 1–8 y dé a cada una un valor razonable — en particular a
    la **zona 3** y a la **zona 4** (partidas por moneda).
 4. Opcionalmente, use la zona 9 para verificar cada switch que la mesa acciona.
-5. Devuelva el DIP a `0` y resetee.
+5. Abra otra vez los switches 1 y 2 y resetee.
 
 Los valores persisten desde entonces en el archivo `.nv`. Distribuir la mesa
 con un `.nv` ya ajustado es la opción más amable.

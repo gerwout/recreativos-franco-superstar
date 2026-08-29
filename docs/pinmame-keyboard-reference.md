@@ -82,15 +82,14 @@ The switch number is just the two digits: **column key = the tens digit, row key
 
 ### Column 2 — cabinet inputs
 
-These also have dedicated keys — see §3, which is what you normally want. The
-chords are listed because two of them (23, 24) have no other way in.
+These also have dedicated keys — see §3, which is what you normally want.
 
 | Switch | Chord | Dedicated key | Contact |
 |---|---|---|---|
 | 21 | `W`+`A` | `Insert` | FALTA (tilt) |
 | 22 | `W`+`S` | — | not wired, does nothing |
-| 23 | `W`+`D` | — | lifts the **ajuste** door switch (§5) |
-| 24 | `W`+`F` | — | lifts the **test** door switch (§5) |
+| 23 | `W`+`D` | — | not wired, does nothing |
+| 24 | `W`+`F` | — | not wired, does nothing |
 | 25 | `W`+`G` | `5` | MONEDERO 25 PTS. — 25 pta coin |
 | 26 | `W`+`H` | `3` | MONEDERO 100 PTS. — 100 pta coin |
 | 27 | `W`+`J` | `Backspace` | CAIDA DE BOLAS — ball drain / outhole |
@@ -151,11 +150,33 @@ second chord to release it.
 | `1` | 28 | Start button. Also the "advance" button inside every operator menu. |
 | `Backspace` | 27 | Drain — puts the ball back in the trough and ends the ball. Deliberately **not** `Home`, which is Slam Tilt in ~35 other drivers. |
 | `Insert` | — | Falta (tilt). Not a matrix switch: it raises RST 6.5 on the CPU. Level-triggered, so hold it. |
+| `7` | 1 | **Interruptor de ajuste** — the left operator switch on the door (§5). |
+| `8` | 2 | **Interruptor de test** — the right operator switch on the door (§5). |
 | `Left Shift` / `Right Shift` | — | Flipper buttons. Not CPU-driven on this machine — they only drive the synthesised flipper solenoids. |
 
-Standard MAME keys that matter here: `Tab` opens the config menu (where the DIP
-switches are), `F3` resets the machine, `P` pauses, `Esc` quits. On first launch
-the emulator shows the copyright screen and waits for you to type **OK**.
+**The two door keys are toggles, and the only ones in this table.** One press
+puts the switch *up* and it stays up; press again to put it back down. That is
+what the physical switches do, and Williams System 4–11 binds its coin-door
+Auto/Manual switch to `7` in exactly the same way. Both start **down**, which is
+the resting position — a machine nobody has touched boots into *juego*.
+
+Their position is shown on screen, in the text area to the right, as
+`Ajuste arriba` / `Ajuste abajo` and the same for `Test`. That is the only way
+to see where a toggle is sitting, so check there rather than counting presses.
+
+Standard MAME keys that matter here: `Tab` opens the config menu, `F3` resets
+the machine, `P` pauses, `Esc` quits. On first launch the emulator shows the
+copyright screen and waits for you to type **OK**.
+
+> **The machine has no DIP switches.** There used to be two in the driver,
+> standing in for the door switches; they are gone, and the operator's real
+> settings live in NVRAM, reached through the ajustes menu (§5).
+>
+> *Dip Switches* in the `Tab` menu is **not** empty, though: it still lists
+> *Balls*, *Spinner time* and *Return to menu*. Those are not this machine's.
+> They come from `SIM_PORTS` in `src/wpc/sim.h`, which every driver using the
+> simulator harness pulls in, and they were always there alongside the old
+> *Door switches* entry. Nothing on this machine reads them.
 
 ---
 
@@ -204,10 +225,10 @@ start button does:
 | ajuste up | BORRADO — clears the stored credits |
 | both up | AJUSTES DE TANTEO Y TEST DE CONTACTOS — the adjustment zones and the contact test |
 
-Switches 23 and 24 lift the *ajuste* and *test* switches respectively. They are
-ANDed into the DIP setting, so with both open the DIP is what applies, and the
-DIP's default is *juego*. They exist because the menus need a door switch to move
-**while the machine runs**, which a DIP cannot do.
+`7` is the *ajuste* switch and `8` is the *test* switch. Both are toggles that
+stay where you put them, and both rest **down**, so an untouched machine is in
+*juego*. They have to be switches rather than a setting because the menus need a
+door switch to move **while the machine runs**.
 
 > **Needs the driver's reset handler.** Until `MACHINE_RESET(RFRANCO)` was added,
 > a soft reset left the driver's power-on state stale — the ball-trough model
@@ -216,28 +237,21 @@ DIP's default is *juego*. They exist because the menus need a door switch to mov
 > into a menu, and it looked as though the mode were fixed at power-on. It is
 > not. See `driver-notes.md` §7C.
 
-### Two ways in, both verified
+### Getting in
 
-**With the DIP** — no timing, nothing to race:
-
-1. `Tab` → *Dip Switches* → *Door switches* → "Ajustes de tanteo y test".
-   (Hold `Tab` for a moment; a quick tap is shorter than a frame and gets missed.)
-2. `F3`. The machine comes up in zone 1 within about 20 s.
-
-**With the switches**, which is what you want if you are leaving the DIP alone:
-
-1. Chord `W`+`D` and `W`+`F` — both door switches up.
+1. Press `7` and `8` — both door switches up. Check the on-screen readout says
+   `Ajuste arriba` and `Test arriba`.
 2. `F3`.
 
-Either way you land in zone 1, with the **zone number in the units digit of the
-credit display** and the zone's value on player 1.
+You land in zone 1 within about 20 s, with the **zone number in the units digit
+of the credit display** and the zone's value on player 1.
 
 Then, inside the menu, the start button is the only control and what it does
 depends on where the door switches are at that moment:
 
-* **`W`+`F`** (test switch back down), then **`1`** — steps to the **next zone**.
+* **`8`** (test switch back down), then **`1`** — steps to the **next zone**.
   Repeat `1` to walk 1 → 2 → … → 9.
-* **`W`+`F`** again (both up), then **`1`** — steps the **current zone's value**.
+* **`8`** again (both up), then **`1`** — steps the **current zone's value**.
 
 ### Zone 9 — TEST DE CONTACTOS
 
@@ -266,12 +280,14 @@ either half of a pair reports the pair's higher number.
 ### Getting back to a game
 
 `F3` again with the door switches back where you want them. To leave the menus
-for good, put the DIP back to "Juego (both down)" and open switches 23 and 24
-(chord `W`+`D` and `W`+`F` again — they latch), then reset.
+for good, press `7` and `8` until the readout says `Ajuste abajo` and
+`Test abajo`, then reset.
 
-MAME persists DIP settings to `~/.xpinmame/cfg/supstarf.cfg` when you quit with
-`Esc`, so a DIP left on "Ajustes" will still be there at the next launch. Delete
-that file to get back to defaults.
+**A toggle's position survives quitting**, exactly as the old DIP setting did.
+Pressing a toggle flips `in->default_value` (`src/inptport.c:2550`), and that is
+the field MAME writes to `~/.xpinmame/cfg/supstarf.cfg` on `Esc` and reads back
+at the next launch. So a machine left with both switches up comes back up in
+AJUSTES. Put them down before quitting, or delete that file.
 
 ---
 
@@ -315,18 +331,25 @@ dump of `coreGlobals.swMatrix`.
 * **`Insert` and `W`+`A`.** Either one latched `C01C` to `0xFF`, lit lamp 11
   (*luz falta*) and filled all thirty digits with the 7447's pattern for 14 —
   the documented signature of the falta handler.
-* **The operator menu route (§5), end to end.** `W`+`D` and `W`+`F` then `F3`
-  brought the machine up in AJUSTES zone 1; `W`+`F` and eight presses of `1`
-  walked it to zone 9; and in zone 9 the contacts closed by chord were reported
-  back under the manual's numbering, one scan pass per press of `1`.
-* **The DIP route.** With *Door switches* set to "Ajustes de tanteo y test"
-  through the `Tab` menu and switches 23/24 left open, the machine entered the
-  menu on its own — nothing else touched.
-* **The reset handler that both of those depend on.** Before the fix in
-  `driver-notes.md` §7C, switches 23/24 held closed across an `F3` left the
-  machine in normal play for the whole of a 300 s observation. After it, the same
+* **The operator menu route (§5), end to end.** Both door switches up then `F3`
+  brought the machine up in AJUSTES zone 1; putting the test switch back down
+  and pressing `1` eight times walked it to zone 9; and in zone 9 the contacts
+  closed by chord were reported back under the manual's numbering, one scan pass
+  per press of `1`.
+* **The reset handler that route depends on.** Before the fix in
+  `driver-notes.md` §7C, door switches held up across an `F3` left the machine
+  in normal play for the whole of a 300 s observation. After it, the same
   sequence reaches AJUSTES zone 1 within 10 s. Both ROM sets still pass
   `tools/rfranco_check.py` and `tools/rfranco_game.py`.
+
+> **What changed when the door switches became toggles.** The two bullets above
+> were originally measured with the controls of the time: a DIP for the mode and
+> chords `W`+`D` / `W`+`F` on switches 23/24 to lift each switch. The route
+> itself is unchanged — same bits reaching the ROM by the same path, only
+> renumbered to switches 1 and 2 — and `tools/rfranco_zones.py` walks it on both
+> sets over the debug API after the change. What has **not** been re-measured
+> with `xdotool` is the two new keys, `7` and `8`; that is a keyboard check and
+> is outstanding.
 
 Not verified here: the contents of the individual adjustment zones — those come
 from `tools/rfranco_zones.py`, which walks the menu over the debug API.

@@ -15,10 +15,11 @@ door switches are *at the time*:
   * both up   -> the button steps the current zone's VALUE
   * either one back down -> the button steps to the NEXT ZONE
 
-so the switches have to move while the machine runs, which a DIP setting
-cannot do. The driver borrows two spare cabinet bits for exactly this: switch
-23 lifts the ajuste switch and switch 24 lifts the test switch. Both are open
-by default, so nothing changes for anyone who does not use them.
+so the switches have to move while the machine runs. The driver models them as
+two ordinary switches in its pseudo coin-door column, the way Williams System
+4-11 does: switch 1 is the ajuste switch and switch 2 is the test switch,
+closed meaning up. Both are open by default, which is the resting position and
+boots the machine into juego.
 
 The zone number itself is shown in the credit display; the value is shown on
 the player displays, which zone is which decides.
@@ -29,6 +30,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -36,11 +38,21 @@ import urllib.request
 PINMAME = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pinmame")
 BINARY = os.path.join(PINMAME, "xpinmamed.x11")
 ROMPATH = os.path.join(PINMAME, "roms")
+
+# Keep the harness out of ~/.xpinmame. MAME saves input port state there on a
+# clean exit, and that includes the position of the two operator door switches
+# (they are toggles - see docs/pinmame-keyboard-reference.md). A switch left up
+# in an interactive session would boot the machine straight into an operator
+# mode on the next launch, failing every check here for a reason that has
+# nothing to do with the driver. Give the emulator a scratch directory instead,
+# so a run neither reads nor writes the user's settings.
+CFGDIR = os.path.join(tempfile.gettempdir(), "rfranco-harness-cfg")
+os.makedirs(CFGDIR, exist_ok=True)
 PORT = 8935
 
 SW_START = 28
-SW_AJUSTE_UP = 23
-SW_TEST_UP = 24
+SW_AJUSTE_UP = 1
+SW_TEST_UP = 2
 
 SEVEN = {0x3F: '0', 0x06: '1', 0x5B: '2', 0x4F: '3', 0x66: '4', 0x6D: '5',
          0x7D: '6', 0x07: '7', 0x7F: '8', 0x6F: '9', 0x00: ' ', 0x79: 'E'}
@@ -129,7 +141,7 @@ def run(rom, steps, as_json):
     s = SETS[rom]
     proc = subprocess.Popen(
         [BINARY, "-headless", "-nosound", "-httpport", str(PORT),
-         "-rompath", ROMPATH, rom],
+         "-rompath", ROMPATH, "-cfg_directory", CFGDIR, rom],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     try:
         end = time.time() + 240

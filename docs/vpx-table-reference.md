@@ -1,11 +1,20 @@
 # Super Star (Recreativos Franco, 1986) — Visual Pinball table-author reference
 
 PinMAME driver: `src/wpc/rfranco.c` / `rfranco.h` / `rfrancogames.c`
-ROM sets: `supstarf` — "Super Star" (rev. 1, 9 operator adjustment zones; the
-revision the factory manual documents) and `supstarfa` — "Super Star (rev. 2)"
-(newer firmware: 19 zones, plus real fixes such as the inter-CPU wake race and
-the stuck-contact watchdog). In this document "set 1" and "set 2" refer to these
-two, matching the ROM-set names.
+ROM sets: `supstarf` — "Super Star" (9 operator adjustment zones; the revision
+the factory manual documents) and `supstarfa` — "Super Star (rev. 2)" (newer
+firmware: 19 zones, plus real fixes such as the inter-CPU wake race and the
+stuck-contact watchdog). In this document "set 1" and "set 2" refer to these two,
+matching the ROM-set names.
+
+> Two further revisions, `supstarfb` and `supstarfc`, have since been dumped.
+> They sit **between** these two in the chain — set 1 is rev. 1 and set 2 is
+> rev. **4** of four — and the driver has no entries for them yet, so a table
+> cannot select them. Nothing in this document changes: everything below still
+> describes set 1 and set 2 exactly as named. The two new revisions differ from
+> set 1 only in internal fixes (see `rom-revision-chain.md`); they carry set 1's
+> nine operator zones and its gameplay behaviour throughout, so a table written
+> for set 1 fits them unchanged.
 
 Boards: CPU 53/3291 (8085A + 8035 sound + 2 x AY-3-8910), driver 53/3308,
 display 53/3307, PSU 53/3309, interconnect 53/3310, bumper/slingshot 53/3311.
@@ -31,13 +40,14 @@ are marked.
 | Thing | Count | VPX numbers |
 |---|---|---|
 | Playfield / cabinet switches | 4 hardware bytes, 27 real contacts | `11`–`18`, `21`–`28`, `31`–`38`, `41`–`48` |
+| Operator door switches | 2 | `1` (*ajuste*), `2` (*test*) — a pseudo column, see §1.6 |
 | Tilt (*falta*) | 1 | **not a matrix switch** — an interrupt line, reachable by closing switch 21, see §1.5 |
 | Lamps | 8 matrix columns, 44 that can light | `1`–`8`, `11`–`18`, … `71`–`74` (see §2) |
 | Solenoids, CPU-driven | 8 of 10 decoder outputs actually used | `2`–`5`, `7`–`10` |
 | Solenoids, synthesised by the driver | 4 (bumpers and slingshots) | `17`–`20` |
 | Flippers | 2, not CPU-controlled | buttons `112` / `114` in, solenoids `45`–`48` out |
 | Display segments | 30 HDSP-3400 digits | LED indices `0`–`33` (see §4) |
-| DIP switches | 2 used of 16 | door switches, see §1.6 |
+| DIP switches | none | the machine has none; operator settings are NVRAM, see §5.1 |
 
 Absences that will trip up a table author:
 
@@ -128,8 +138,8 @@ back through the 8212 latch. Driver-board connector JO; CPU-board connector JC.
 |---|---|---|---|---|---|
 | 21 | PA0 | — | *(borrowed)* FALTA (tilt) | cabinet | Not a real contact — the game never reads this bit. The driver borrows it to raise RST 6.5, which is how the tilt pendulum reaches the CPU. See §1.5. |
 | 22 | PA1 | — | — | — | **Not wired, never read.** Free. |
-| 23 | PA2 | — | *(borrowed)* AJUSTE switch up | coin door | Not a real contact — the game never reads this bit. The driver borrows it so a front end can lift the **ajuste** door switch while the machine runs, which the DIP setting cannot do. See §5.1. |
-| 24 | PA3 | — | *(borrowed)* TEST switch up | coin door | Same, for the **test** door switch. |
+| 23 | PA2 | — | — | — | **Not wired, never read.** Free. |
+| 24 | PA3 | — | — | — | **Not wired, never read.** Free. |
 | 25 | PA4 | MONEDERO 25 PTS. | 25 pta coin slot | coin door | **Required.** Must be a short pulse — see §6.1. |
 | 26 | PA5 | MONEDERO 100 PTS. | 100 pta coin slot | coin door | **Required.** Must be a short pulse — see §6.1. |
 | 27 | PA6 | CAIDA DE BOLAS | Ball drain / outhole | trough | **Required, and must read CLOSED at rest** — see §6.1. Manual contact 28; the driver board also labels this net *contacto final partidas*. |
@@ -137,7 +147,7 @@ back through the 8212 latch. Driver-board connector JO; CPU-board connector JC.
 
 Only bits 4–7 are ever tested by the game program (verified by exhaustive search
 of the reads of `C027`), which is why the driver is free to borrow the low four.
-21 is *falta* (§1.5), 23 and 24 are the door switches (§5.1), and 22 does nothing.
+21 is *falta* (§1.5); 22, 23 and 24 do nothing.
 
 ### 1.3 Column 3 — the serial 74165 chain, left half (driver-board IC6, connector JM)
 
@@ -209,22 +219,34 @@ still lit. That is what a tilt looks like — and it is also what the fault
 handler looks like from any other cause, which is why §6.1 says to read `C01C`
 before suspecting the display.
 
-### 1.6 Operator door switches — DIP 1 and 2
+### 1.6 Operator door switches — switches 1 and 2
 
 The two door switches (*interruptor de ajuste*, *interruptor de test*) are not
-matrix switches either. They arrive as PSG2 port B bits 7/6 and the driver models
-them as DIP switches 1–2 (`core_getDip(0) & 0x03`). In VPX: `Controller.Dip(0)`.
+on any of the four hardware bytes either. They arrive as PSG2 port B bits 7/6,
+and the driver gives them a pseudo column of their own — the same place Williams
+System 4–11 keeps its coin door:
 
-| DIP value | Manual position | Mode entered at power-on |
+| # | Port bit | Spanish name | English name | Notes |
+|---|---|---|---|---|
+| 1 | PB7 | INTERRUPTOR DE AJUSTE | Adjust switch | **Closed = up.** Open at rest. |
+| 2 | PB6 | INTERRUPTOR DE TEST | Test switch | **Closed = up.** Open at rest. |
+
+In VPX: `Controller.Switch(1)` and `Controller.Switch(2)`, like any other switch.
+There is no DIP involved — this machine has no DIP switches at all.
+
+| Switch 1 (ajuste) | Switch 2 (test) | Mode entered at power-on |
 |---|---|---|
-| 0 | both down | **JUEGO** (normal play) |
-| 1 | test up only | **TEST DE LUCES Y VISUALIZACION DE RAM** |
-| 2 | ajuste up only | **BORRADO DE DISPLAY Y CREDITOS** |
-| 3 | both up | **AJUSTES DE TANTEO Y TEST DE CONTACTOS** |
+| open | open | **JUEGO** (normal play) |
+| open | closed | **TEST DE LUCES Y VISUALIZACION DE RAM** |
+| closed | open | **BORRADO DE DISPLAY Y CREDITOS** |
+| closed | closed | **AJUSTES DE TANTEO Y TEST DE CONTACTOS** |
 
-The ROM chooses the mode at boot (dispatch at `0x00BB`), so entering a menu needs
-a **reset** with the DIP already set. Once inside a menu the DIP is re-read live,
-which is what makes the "lower the adjust switch, press start" navigation work.
+Both open is the resting position, so a table that never touches them gets
+normal play. The ROM chooses the mode at boot (dispatch at `0x00BB`), so entering
+a menu needs a **reset** with the switches already set; the switch states survive
+a soft reset, since core only clears the matrix on a cold start. Once inside a
+menu the pair is re-read live, which is what makes the "lower the adjust switch,
+press start" navigation work.
 
 ---
 
@@ -598,10 +620,10 @@ player 2 (8-14)   credits (32-33)    player 4 (24-30)
 
 ## 5. Operator adjustments, tests and audits
 
-Reached with the two door switches (§1.6 — DIP 1–2). The **start button
+Reached with the two door switches (§1.6 — switches 1 and 2). The **start button
 (switch 28)** is the only control inside every menu.
 
-### 5.1 AJUSTES DE TANTEO Y TEST DE CONTACTOS (DIP = 3)
+### 5.1 AJUSTES DE TANTEO Y TEST DE CONTACTOS (both switches closed)
 
 Nine zones in `supstarf`. **The zone number is shown in the units digit of the
 credits display** (segment index 33).
@@ -611,10 +633,10 @@ Procedure from the manual:
 1. Switch the machine off.
 2. Set both door switches up and power on — you land in zone 1 with its current
    value.
-3. To move to another zone: put the *ajuste* switch **down** (DIP = 1) and press
-   start; each press advances one zone.
+3. To move to another zone: put the *ajuste* switch **down** (open switch 1)
+   and press start; each press advances one zone.
 4. To change the value of the current zone: put the *ajuste* switch **up**
-   (DIP = 3) and press start; each press steps the value.
+   (close switch 1 again) and press start; each press steps the value.
 
 | Zone | Spanish | English | Range |
 |---|---|---|---|
@@ -672,7 +694,7 @@ them: zone 15 makes the 100 puntos lane pay 1 000 where set 1 pays 100, and
 zone 17 is on by default, so the bumpers go to 10 000 after the first completed
 diana.
 
-### 5.2 TEST DE LUCES Y VISUALIZACION DE RAM (DIP = 1)
+### 5.2 TEST DE LUCES Y VISUALIZACION DE RAM (switch 2 closed)
 
 Power on with the *test* switch up and the machine goes straight into the lamp
 test: every playfield and backbox bulb lights alternately. This exercises both
@@ -709,7 +731,7 @@ Pressing **start** from inside the lamp test steps through the RAM-visualisation
 | Player 3 | TOTAL PARTIDAS GRATIS MONEDAS DE 25 PTS. | Free games from the 25 pta slot |
 | Player 4 | TOTAL PARTIDAS GRATIS MONEDAS DE 100 PTS. | Free games from the 100 pta slot |
 
-### 5.3 BORRADO DE DISPLAY Y CREDITOS (DIP = 2)
+### 5.3 BORRADO DE DISPLAY Y CREDITOS (switch 1 closed)
 
 Powering on in this position clears all stored credits.
 
@@ -888,13 +910,13 @@ moment and then comes up with **every adjustment at zero**.
 **Practical consequence: zero games per coin. The machine will appear to swallow
 coins without crediting.** Before shipping a table, or on your own first run:
 
-1. Set DIP 1–2 to `3` (both door switches up) and reset.
-2. You land in zone 1 (balls per game). DIP = `3` + start changes the value;
-   DIP = `1` + start advances to the next zone.
+1. Close switches 1 and 2 (both door switches up) and reset.
+2. You land in zone 1 (balls per game). Both closed + start changes the value;
+   open switch 1 + start advances to the next zone.
 3. Walk zones 1–8 and give each a sane value — in particular **zone 3** and
    **zone 4** (games per coin).
 4. Optionally use zone 9 to verify every switch the table drives.
-5. Set DIP back to `0` and reset.
+5. Open switches 1 and 2 again and reset.
 
 The values persist in the `.nv` file from then on. Shipping a pre-adjusted `.nv`
 with the table is the friendliest option.

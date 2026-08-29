@@ -33,7 +33,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from rfranco_game import (Machine, Report, BINARY, ROMPATH, ROMS,   # noqa: E402
+from rfranco_game import (Machine, Report, BINARY, ROMPATH, ROMS, CFGDIR,   # noqa: E402
                           SW_COIN25, SW_DRAIN, SW_START, L_BALL, L_GAMEOVER,
                           L_START, S_BALLREL)
 # Shared with the health harness rather than copied: the fill glyph and the
@@ -144,7 +144,7 @@ def run(rom, games, seed, verbose):
     rng = random.Random(seed)
     proc = subprocess.Popen(
         [BINARY, "-headless", "-nosound", "-httpport", str(PORT),
-         "-rompath", ROMPATH, rom],
+         "-rompath", ROMPATH, "-cfg_directory", CFGDIR, rom],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     try:
         m = Machine(PORT)

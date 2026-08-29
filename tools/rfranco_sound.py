@@ -35,6 +35,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -42,6 +43,16 @@ import urllib.request
 PINMAME = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pinmame")
 BINARY = os.path.join(PINMAME, "xpinmamed.x11")
 ROMPATH = os.path.join(PINMAME, "roms")
+
+# Keep the harness out of ~/.xpinmame. MAME saves input port state there on a
+# clean exit, and that includes the position of the two operator door switches
+# (they are toggles - see docs/pinmame-keyboard-reference.md). A switch left up
+# in an interactive session would boot the machine straight into an operator
+# mode on the next launch, failing every check here for a reason that has
+# nothing to do with the driver. Give the emulator a scratch directory instead,
+# so a run neither reads nor writes the user's settings.
+CFGDIR = os.path.join(tempfile.gettempdir(), "rfranco-harness-cfg")
+os.makedirs(CFGDIR, exist_ok=True)
 PORT = 8932
 
 PSG_CLOCK = 5068800.0 / 6.0     # the 8035's T0 pin, XTAL/6 = 844800 Hz
@@ -165,7 +176,7 @@ def analyse(ev, verbose):
 def run(rom, verbose):
     proc = subprocess.Popen(
         [BINARY, "-headless", "-nosound", "-httpport", str(PORT),
-         "-rompath", ROMPATH, rom],
+         "-rompath", ROMPATH, "-cfg_directory", CFGDIR, rom],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=True)
     try:

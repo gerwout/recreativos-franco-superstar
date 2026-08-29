@@ -540,11 +540,28 @@ Two caveats earned the hard way during this retest, worth keeping:
   the headless machine's emulated speed varies with interleave (and with host
   load), so gameplay-attribution assertions are speed-sensitive. The bonus
   check at 100 above is the example: same total score, different attribution.
+* The harnesses launch with `-cfg_directory` pointing at a scratch directory,
+  and they need to. MAME saves input port state to `~/.xpinmame/cfg/<game>.cfg`
+  on a clean exit, and since the door switches became toggles that file carries
+  their position: press `8` in an interactive session, quit with `Esc`, and
+  every later launch boots into TEST DE LUCES. Measured - with such a cfg in
+  place `rfranco_check` fails on `supstarfa` with "the credit display never came
+  up", which reads as a driver fault and is not one. The old DIP persisted the
+  same way, so this was always possible; it is just easy to trigger now. The
+  scratch directory also means a run cannot overwrite the user's own settings.
+* `tools/rfranco_zones.py` is the worst of them, and it does not assert - it
+  reports what it managed to reach, so a short walk looks like a finding rather
+  than a flake. On `supstarfa`, which has 19 zones, three consecutive runs on
+  one machine reached 12, 18 and 8 of them, stopping wherever a `next_zone`
+  press loop happened to time out; the sampled zone *values* wobble too, because
+  the display is read at whatever point the ROM's redraw has got to. Measured
+  across the door-switch rework, with the 12 coming from the driver *before* the
+  change - so the spread is the harness, not the driver. Treat a short walk as
+  no evidence either way and re-run it; only the deepest run of several says
+  anything about how many zones exist.
 
 ### 7.4 Smaller things
 
-* `MDRV_DIPS(16)` declares sixteen DIP bits for two used ones. Harmless -
-  `core_updateSw` reads `(coreDips+31)/16` ports either way - but untidy.
 * `core_bcd2seg7[]` only initialises entries 0-9 outside `MAME_DEBUG` builds, so
   the driver's use of index `0x0F` to blank a digit works by falling into the
   zero-initialised tail. Correct in both build types (index 15 is zero either
@@ -627,21 +644,52 @@ separates them.
 
 ---
 
-## 7B. The operator door switches are now reachable as switches
+## 7B. The operator door switches are switches, not DIPs
 
-The two door switches were only settable through `core_getDip`, which is fine
-for choosing a mode at power-on and useless for anything else: inside the
-AJUSTES menu the ROM re-reads them on every pass and uses them to decide what
-the start button does - both up steps the current zone's *value*, either one
-down steps to the next *zone*. Walking the menu means moving a switch while the
-machine runs, and a DIP setting cannot do that.
+They cannot be a setting. Inside the AJUSTES menu the ROM re-reads the pair on
+every pass and uses it to decide what the start button does - both up steps the
+current zone's *value*, either one down steps to the next *zone*. Walking the
+menu means moving a switch while the machine runs.
 
-The ROM never looks at bits 0-3 of the cabinet byte (every read masks
-`0x10`/`0x20`/`0x40`/`0x80`), which is what already lets the driver borrow bit 0
-for *falta*. Bits 2 and 3 - switches 23 and 24 - now lift the *ajuste* and
-*test* door switches respectively, ANDed into whatever the DIP says, so with
-both open nothing changes. `tools/rfranco_zones.py` uses them to walk the whole
-menu on either set.
+This was arrived at in two goes. The first modelled the pair as a two-bit DIP
+and then, because of the paragraph above, borrowed two spare cabinet bits
+(switches 23 and 24, in the byte the ROM reads as AY IC2 port A) that could
+*lift* each switch, ANDed into whatever the DIP said. That worked, but it left
+one pair of physical switches with two unrelated controls, only one of which
+could move at run time - and it put them in the port A byte when they are
+physically on port B.
+
+They are now two `COREPORT_BITTOG` toggles in the core inport on keys `7` and
+`8`, landing in `swMatrix[0]` as switches 1 and 2, with the DIP gone entirely
+(`MDRV_DIPS(0)`; the inport itself stays, because core reads one regardless -
+see the comment in `rfranco.h`). That is the Williams System 4-11 arrangement:
+`s4.h:18` and `s11.h:22` bind Auto/Manual and Up/Down to `COREPORT_BITTOG` on
+`KEYCODE_7`, `s11.c:784` puts them in the pseudo column 0, and `s11.c:800`
+prints their position on screen, which this driver now does too.
+
+Two deliberate departures from the Williams code:
+
+* **Positive switch numbers.** `S11_SWADVANCE` is `-7`, which only resolves
+  through core's *default* `sw2m`; this driver installs its own for the
+  `col*10 + row + 1` scheme, under which column 0 simply *is* switches 1-8. Same
+  slot, a number that survives `core_setSw`. (The default formula maps `-7` to
+  matrix index `-8`, and `s11_sw2m` - the conversion that would make the
+  Williams constants come out right - is compiled out as unused, so the idiom
+  looks fragile upstream as well. Not this driver's to fix.)
+* **Change detection instead of a blanket column write.** `s11.c` assigns the
+  whole of `swMatrix[0]` from the inport every frame. Doing that here would undo
+  §7A: it stamps back over anything a front end or the harness sets between
+  vblanks, and these two switches are exactly what an operator-menu walker
+  drives from outside. The keyboard owns a bit only at the moment it moves it.
+
+Closed means the switch is up, so both open is *juego* and an untouched machine
+boots into normal play. The states survive an `F3` - core only clears
+`coreGlobals` on a cold start - which is what makes flip-then-reset work. They
+also survive quitting, so nothing was given up in dropping the DIP: a toggle
+press flips `in->default_value` (`inptport.c:2550`), and that is exactly the
+field `config_write_ports` saves to the `.cfg` and the loader restores.
+`tools/rfranco_zones.py` walks the whole menu on either set through switches
+1 and 2.
 
 ## 7C. The driver had no reset handler, so a soft reset did almost nothing
 
@@ -670,9 +718,9 @@ of `hardware-findings.md` already records what that does to this ROM: `0x030F`
 and `0x0331` ping-pong for ever and the foreground program never completes its
 startup. The boot dispatch at `0x00BB` — the only place in the whole program
 where the operator door switches are read — was therefore never reached, so no
-combination of door switches or DIP setting could take a *running* machine into a
-menu. It looked like a ROM property ("the mode is chosen at power-on and a reset
-does not redo it") and it was not; it was this.
+combination of door switches could take a *running* machine into a menu. It
+looked like a ROM property ("the mode is chosen at power-on and a reset does not
+redo it") and it was not; it was this.
 
 Fixed by making it a `MACHINE_RESET(RFRANCO)` and declaring
 `MDRV_CORE_INIT_RESET_STOP(NULL, RFRANCO, NULL)`, which is what the comparable
@@ -680,12 +728,14 @@ drivers do — `idsa.c` (also Spanish, also 8085-era), `mac.c`, `jeutel.c`. Noth
 in the handler is once-only, so there is no init hook left to keep. `coreData->reset()`
 also runs on the first pass, so cold boot behaviour is unchanged.
 
-Measured, on `supstarf` with the DIP at its default (*juego*):
+Measured on `supstarf`, at the time through the controls of §7B's first design
+(the door switches were then switches 23 and 24, lifting a DIP at its *juego*
+default; they are switches 1 and 2 now, and the route is otherwise the same):
 
 | | Before | After |
 |---|---|---|
-| Cold boot, switches 23/24 open | normal play | normal play |
-| Close switches 23/24, press `F3` | still normal play after 300 s | **AJUSTES zone 1 within 10 s** |
+| Cold boot, both door switches down | normal play | normal play |
+| Put both door switches up, press `F3` | still normal play after 300 s | **AJUSTES zone 1 within 10 s** |
 | Trough bit (row 2, `0x40`) after `F3` | left as the last game left it | re-seeded closed |
 
 Both ROM sets still pass `tools/rfranco_check.py` and `tools/rfranco_game.py`.
