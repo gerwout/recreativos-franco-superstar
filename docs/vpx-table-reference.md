@@ -1,20 +1,21 @@
 # Super Star (Recreativos Franco, 1986) — Visual Pinball table-author reference
 
 PinMAME driver: `src/wpc/rfranco.c` / `rfranco.h` / `rfrancogames.c`
-ROM sets: `supstarf` — "Super Star" (9 operator adjustment zones; the revision
-the factory manual documents) and `supstarfa` — "Super Star (rev. 2)" (newer
-firmware: 19 zones, plus real fixes such as the inter-CPU wake race and the
-stuck-contact watchdog). In this document "set 1" and "set 2" refer to these two,
-matching the ROM-set names.
+ROM sets: `supstarf1` — "Super Star (rev. 1)" (9 operator adjustment zones; the
+revision the factory manual documents) and `supstarf4` — "Super Star (rev. 4)"
+(newer firmware: 19 zones, plus real fixes such as the inter-CPU wake race and
+the stuck-contact watchdog). In this document "set 1" and "set 2" refer to these
+two — the names they had when it was written. Set 2 is `supstarf4`, **not**
+`supstarf2`.
 
-> Two further revisions, `supstarfb` and `supstarfc`, have since been dumped.
+> Two further revisions, `supstarf2` and `supstarf3`, have since been dumped.
 > They sit **between** these two in the chain — set 1 is rev. 1 and set 2 is
-> rev. **4** of four — and the driver has no entries for them yet, so a table
-> cannot select them. Nothing in this document changes: everything below still
-> describes set 1 and set 2 exactly as named. The two new revisions differ from
-> set 1 only in internal fixes (see `rom-revision-chain.md`); they carry set 1's
-> nine operator zones and its gameplay behaviour throughout, so a table written
-> for set 1 fits them unchanged.
+> rev. **4** of four — and the driver now has entries for them, so a table can
+> select them. Nothing in this document changes: everything below still
+> describes revs. 1 and 4. The two new revisions differ from rev. 1 only in
+> internal fixes (see `rom-revision-chain.md`); they carry rev. 1's nine operator
+> zones and its gameplay behaviour throughout, so a table written for rev. 1 fits
+> them unchanged.
 
 Boards: CPU 53/3291 (8085A + 8035 sound + 2 x AY-3-8910), driver 53/3308,
 display 53/3307, PSU 53/3309, interconnect 53/3310, bumper/slingshot 53/3311.
@@ -65,7 +66,7 @@ Absences that will trip up a table author:
 ### 0.1 Loading it from a table script
 
 ```vbscript
-Const cGameName = "supstarf"      ' rev. 1 - or "supstarfa" for rev. 2
+Const cGameName = "supstarf1"     ' rev. 1 - or "supstarf4" for rev. 4
 With Controller
     .GameName = cGameName
     .SplashInfoLine = "Super Star (Recreativos Franco 1986)"
@@ -625,7 +626,7 @@ Reached with the two door switches (§1.6 — switches 1 and 2). The **start but
 
 ### 5.1 AJUSTES DE TANTEO Y TEST DE CONTACTOS (both switches closed)
 
-Nine zones in `supstarf`. **The zone number is shown in the units digit of the
+Nine zones in `supstarf1`. **The zone number is shown in the units digit of the
 credits display** (segment index 33).
 
 Procedure from the manual:
@@ -661,7 +662,7 @@ The test covers only the 23 playfield contacts read through `0x4000` and the
 the four contacts wired in parallel with another one — closing either half of a
 pair reports the pair's higher number (see the appendix).
 
-### 5.1.1 `supstarfa`'s ten extra zones
+### 5.1.1 `supstarf4`'s ten extra zones
 
 The newer firmware extends the menu to **nineteen** zones: set 1's nine
 unchanged, then ten more shown as 10–19. (Its jump table at `0x349D` has 25
@@ -837,7 +838,7 @@ switch directly is on its own — the driver deliberately does not touch a switc
 it is not currently changing (see below), so it will not shorten your pulse for
 you.
 
-**(3) On `supstarfa` only: do not leave switch 11, 12, 18 or 47 closed.**
+**(3) On `supstarf4` only: do not leave switch 11, 12, 18 or 47 closed.**
 
 Set 2 has a stuck-contact watchdog that set 1 does not. A contact held closed for
 about 128 consecutive game-loop passes — measured at ~27 s from a cold NVRAM and

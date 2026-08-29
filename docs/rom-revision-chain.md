@@ -6,17 +6,19 @@ Star firmware. Neither is newer than the two sets already known: **they sit
 between them**, and the four images form a single linear revision chain.
 
 ```
-rev. 1  m31-a-01187.ic19  AB8B1148   supstarf    MAME parent / PinMAME supstarf
-rev. 2  27128Prg.bin      77C43E87   supstarfc   NEW - PinMAME "set C"
-rev. 3  super.dat         51697AFF   supstarfb   NEW - PinMAME "set B"
-rev. 4  27c128.ic19       9A440461   supstarfa   MAME clone / PinMAME supstarfa
+rev. 1  m31-a-01187.ic19  AB8B1148   supstarf1   MAME parent (supstarf)
+rev. 2  27128Prg.bin      77C43E87   supstarf2   NEW - was "set C"
+rev. 3  super.dat         51697AFF   supstarf3   NEW - was "set B"
+rev. 4  27c128.ic19       9A440461   supstarf4   MAME clone (supstarfa)
 ```
 
-**The PinMAME set letters are not chronological.** `supstarfb` and `supstarfc`
-were named before the order was known, and "set B / set C" was chosen precisely
-so as not to imply one — a good call, since set C turns out to be the earlier
-firmware. The letters are the stable identifiers; this document supplies the
-order they deliberately do not encode.
+**The PinMAME set names are chronological — but they were not when this was
+written.** The two new sets were first lettered "set B" and "set C", chosen
+before the order was known and deliberately so as not to imply one — a good
+call, since set C turned out to be the earlier firmware. This document supplied
+the order those letters did not encode, and PinMAME then adopted it: the sets
+are now numbered `supstarf1`..`supstarf4` by revision. Set B is `supstarf3` and
+set C is `supstarf2`.
 
 A fifth file in `super_star_setC.zip`, `m1-31_b_1704.ic32`, is **not Super Star
 and not a pinball ROM** — see §7.
@@ -27,8 +29,8 @@ and not a pinball ROM** — see §7.
 
 | Archive | File | Size | CRC32 | SHA-1 | Zip date | Verdict |
 |---|---|---|---|---|---|---|
-| `super_star_rev3.zip` | `super.dat` | 16384 | `51697AFF` | `d10c6456716ca49cce590996e7271b8cd7026f38` | 2015-03-27 | **new — rev. 3 = `supstarfb`, set B** |
-| `super_star_setC.zip` | `27128Prg.bin` | 16384 | `77C43E87` | `efdf60b53ac105985ca6d4eeb6ed48b893bb7ad8` | 2016-10-14 | **new — rev. 2 = `supstarfc`, set C** |
+| `super_star_rev3.zip` | `super.dat` | 16384 | `51697AFF` | `d10c6456716ca49cce590996e7271b8cd7026f38` | 2015-03-27 | **new — rev. 3 = `supstarf3`** (then "set B") |
+| `super_star_setC.zip` | `27128Prg.bin` | 16384 | `77C43E87` | `efdf60b53ac105985ca6d4eeb6ed48b893bb7ad8` | 2016-10-14 | **new — rev. 2 = `supstarf2`** (then "set C") |
 | | `super.dat` | 16384 | `51697AFF` | `d10c6456716ca49cce590996e7271b8cd7026f38` | 2015-03-27 | duplicate of the above |
 | | `m31-a-01187.ic19` | 16384 | `AB8B1148` | `496d3c9664386ae64e94462db2fdd36811a68a87` | 2014-11-27 | known — rev. 1 |
 | | `27c128.ic19` | 16384 | `9A440461` | `e2f8dcf95084f755d3a34d77ba2649602687a610` | 2014-11-27 | known — rev. 4 |
@@ -76,12 +78,12 @@ tools/rom_diff.py inventory     # §1  hashes, sizes, the checksum scheme
 tools/rom_diff.py matrix        # §3.1 instruction counts and the hunk matrix
 tools/rom_diff.py coverage      # §6  byte classification and residue
 tools/rom_diff.py sound         # §6  command census and the chime table
-tools/rom_diff.py hunks roms/supstarf.zip:m31-a-01187.ic19 \
-                        roms/supstarfc.zip:27128Prg.bin      # §4
-tools/rom_diff.py hunks roms/supstarfc.zip:27128Prg.bin \
-                        roms/supstarfb.zip:super.dat          # §5
-tools/rom_diff.py shifts roms/supstarf.zip:m31-a-01187.ic19 \
-                         roms/supstarfc.zip:27128Prg.bin      # §4 NVRAM shift
+tools/rom_diff.py hunks roms/supstarf1.zip:m31-a-01187.ic19 \
+                        roms/supstarf2.zip:27128Prg.bin      # §4
+tools/rom_diff.py hunks roms/supstarf2.zip:27128Prg.bin \
+                        roms/supstarf3.zip:super.dat          # §5
+tools/rom_diff.py shifts roms/supstarf1.zip:m31-a-01187.ic19 \
+                         roms/supstarf2.zip:27128Prg.bin      # §4 NVRAM shift
 ```
 
 ---
@@ -240,7 +242,7 @@ depends on the stack being balanced when it gets there.
 An extra `CALL $244F` at `2888` in the player-score display writer, and a
 redundant `PUSH PSW / POP PSW` pair removed at `28AF`.
 
-## 6. Step 3 — rev. 3 → rev. 4 (`27c128.ic19`, `supstarfa`)
+## 6. Step 3 — rev. 3 → rev. 4 (`27c128.ic19`, `supstarf4`)
 
 The large one: +513 instructions, +1 162 bytes, 43 hunks, and the only step that
 changes the NVRAM map (stack base `C7FF` → `C7CF`, freeing `C7D0`–`C7FF` for 21
@@ -339,16 +341,18 @@ variant. Nothing needs to be done with it — it is already dumped and emulated.
 
 ## 8. Consequences
 
-### 8.1 Two ROM sets to add
+### 8.1 Two ROM sets to add — *added upstream in `29253251`*
 
 Built into `../roms/`, each pairing the new game ROM with the verified sound ROM,
-using the set names and internal filenames of the proposed PinMAME entries:
+using the set names and internal filenames of the PinMAME entries (proposed
+here, and since merged upstream — the sets were renumbered `supstarf1`..
+`supstarf4` at the same time):
 
 | set | file | CRC32 | SHA-1 |
 |---|---|---|---|
-| `supstarfb` — set B (rev. 3) | `super.dat` | `51697AFF` | `d10c6456716ca49cce590996e7271b8cd7026f38` |
+| `supstarf3` — rev. 3, then "set B" | `super.dat` | `51697AFF` | `d10c6456716ca49cce590996e7271b8cd7026f38` |
 | | `2532.ic4` | `D6D7EEE2` | `60e497c8845320eea01662d894d0b16349ebb7e4` |
-| `supstarfc` — set C (rev. 2) | `27128Prg.bin` | `77C43E87` | `efdf60b53ac105985ca6d4eeb6ed48b893bb7ad8` |
+| `supstarf2` — rev. 2, then "set C" | `27128Prg.bin` | `77C43E87` | `efdf60b53ac105985ca6d4eeb6ed48b893bb7ad8` |
 | | `2532.ic4` | `D6D7EEE2` | `60e497c8845320eea01662d894d0b16349ebb7e4` |
 
 Both were verified byte for byte against those entries: exact filenames (the
@@ -360,11 +364,14 @@ Neither game ROM appears in PinMAME `master` (now at upstream `99d8c322`, which
 already carries `src/wpc/rfranco.c`) nor in the MAME tree — both CRCs are absent
 from both source trees. They are genuinely unpreserved.
 
-### 8.2 `supstarfa`'s description is now wrong
+### 8.2 The rev. 4 set's description — *fixed upstream*
 
-PinMAME's `rfrancogames.c` calls `supstarfa` *"Super Star (rev. 2)"*. It is
-rev. **4** of four. Its source comment also credits it with the sender's
-`HLT` replacement and the TRAP sentinel; both belong to earlier revisions.
+PinMAME's `rfrancogames.c` used to call this set *"Super Star (rev. 2)"*, and
+credited it in a source comment with the sender's `HLT` replacement and the TRAP
+sentinel; both belong to earlier revisions. Upstream `29253251` renamed it to
+`supstarf4`, *"Super Star (rev. 4)"*, and moved those attributions to the
+revisions that own them. MAME still calls the same image `supstarfa`,
+*"Super Star (Recreativos Franco, set 2)"*.
 
 ### 8.3 Nothing changes for the driver itself
 
@@ -372,7 +379,9 @@ All four revisions use the same hardware, the same NVRAM window, the same 26
 sound-send sites and the same switch-test table. Revs. 2 and 3 need only
 `RFRANCO_ROMSTART` entries and `CORE_CLONEDEFNV` lines; no driver code.
 
-**Not yet done:** the two new images have not been booted under PinMAME. That
-needs the two clone entries added to `rfrancogames.c` first, after which
-`tools/rfranco_check.py` and `tools/rfranco_zones.py` can confirm they boot,
-attract, and walk their nine-zone menu. The analysis above is entirely static.
+**Still to do:** the two new images have not been booted under PinMAME. The
+clone entries are now in `rfrancogames.c` (upstream `29253251`), so
+`tools/rfranco_check.py` and `tools/rfranco_zones.py` could confirm they boot,
+attract, and walk their nine-zone menu — but the harnesses do not yet carry
+address tables for revs. 2 and 3, so this has not been run. The analysis above
+is entirely static.

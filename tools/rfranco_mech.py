@@ -26,7 +26,7 @@ What is asserted, in order:
   6. the driver did not touch the contact anywhere in (4)-(5): every edge on
      switch 27 in that window is one this harness wrote.
 
-Run tools/rfranco_mech.py [--rom supstarf|supstarfa|all] [--verbose].
+Run tools/rfranco_mech.py [--rom supstarf1|supstarf4|all] [--verbose].
 Exit code 0 = pass, 1 = fail, 2 = could not run.
 """
 import argparse
@@ -160,7 +160,7 @@ def run(rom, verbose):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rom", default="supstarf", choices=ROMS + ("all",))
+    ap.add_argument("--rom", default="supstarf1", choices=ROMS + ("all",))
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
     if not os.path.exists(BINARY):

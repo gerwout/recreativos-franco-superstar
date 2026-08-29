@@ -8,12 +8,12 @@ the failures that only turn up after a while - the ROM's fault handler latching,
 the display sticking on the fault fill, the stack walking away, a CPU stopping,
 or the game simply refusing to start another game.
 
-    tools/rfranco_soak.py [--rom supstarf|supstarfa|all] [--games N] [--seed N]
+    tools/rfranco_soak.py [--rom supstarf1|supstarf4|all] [--games N] [--seed N]
 
 Exit code 0 = clean, 1 = something went wrong, 2 = could not run.
 
 Contacts are pulsed, never held. Two reasons: a coin held closed for more than
-~200 ms wedges the machine by design, and on `supstarfa` a playfield contact held
+~200 ms wedges the machine by design, and on `supstarf4` a playfield contact held
 closed for about 128 game-loop passes trips the stuck-contact watchdog, which is
 also by design. Both are real machine behaviour and neither is what this is
 looking for.
@@ -43,7 +43,7 @@ from rfranco_check import EE_FILL, seg7_has_letters, sample_pcs   # noqa: E402
 PORT = 8937
 FALTA = 0xC01C
 SP_SLACK = 0x0400
-SP_RESET = {"supstarf": 0xC7FF, "supstarfa": 0xC7CF}
+SP_RESET = {"supstarf1": 0xC7FF, "supstarf4": 0xC7CF}
 
 # Everything the playfield can present. The drop targets are pulsed rather than
 # held, so the banks rarely complete - that is fine, this is looking for

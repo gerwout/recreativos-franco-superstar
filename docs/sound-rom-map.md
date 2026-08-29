@@ -1,6 +1,6 @@
 # Recreativos Franco "Super Star" — 2532 sound ROM (IC4), complete byte map
 
-Image: `supstarf.zip::2532.ic4`, 4096 bytes, **bit-reversed** on the board.
+Image: `supstarf1.zip::2532.ic4`, 4096 bytes, **bit-reversed** on the board.
 All addresses below are in the de-reversed image
 (`bytes(int('{:08b}'.format(b)[::-1],2) for b in raw)`), which is what the 8035
 actually executes.

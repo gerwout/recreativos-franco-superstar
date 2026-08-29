@@ -165,6 +165,11 @@ rfranco: new driver for Recreativos Franco Super Star (1986)
 
 **Body:**
 
+> **Since merged.** The body below is kept verbatim as submitted. Upstream
+> `29253251` later added the two new revisions and renumbered all four sets by
+> revision, so `supstarf` is now `supstarf1` and `supstarfa` is now `supstarf4`
+> — and the latter is labelled "rev. 4", which is what it actually is.
+
 ```markdown
 A new driver for Recreativos Franco's *Super Star* (Spain, 1986), with two ROM
 sets — `supstarf` (rev. 1, the revision the factory manual documents) and

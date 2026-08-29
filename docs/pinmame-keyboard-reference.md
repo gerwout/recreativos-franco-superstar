@@ -26,6 +26,12 @@ cd /code/superstar/pinmame
 the "type OK" screen. Add `-nosound` if the audio stutters, and `-httpport 8931`
 if you want the debug API and its web UI at `/ui`.
 
+**The binary must be built from a driver that has the four numbered sets**
+(upstream `29253251` or later). An older build knows only `supstarf` and
+`supstarfa`, and PinMAME's fuzzy name matching will quietly resolve `supstarf1`
+to `supstarf` and then fail with `m31-a-01187.ic19 NOT FOUND` — a missing-ROM
+error, not an unknown-game one, which sends you looking in the wrong place.
+
 **If the window renders transparent**, that is not the driver. `x11_find_best_visual`
 (`src/unix/video-drivers/x11_window.c:359`) asks for a depth-32 TrueColor visual
 first and nothing in the codebase ever writes the alpha byte, so under a

@@ -4,7 +4,7 @@
 Boots the driver headless, waits for it to settle, then asserts on the health
 invariants established during bring-up. Run it after every change.
 
-    tools/rfranco_check.py [--rom supstarf|supstarfa|all] [--verbose]
+    tools/rfranco_check.py [--rom supstarf1|supstarf4|all] [--verbose]
 
 Both ROM sets are supported. They are the same game with different firmware,
 and almost every interesting address moved between them, so everything the
@@ -76,11 +76,11 @@ PORT = 8931
 #               is the first. Established by diffing NVRAM across a coin.
 #   sp_reset    the LXI SP at the reset vector, ROM[0x0001:0x0003]. Cross checked.
 SETS = {
-    "supstarf": {
+    "supstarf1": {
         "trap": 0x1800, "disp": 0x2437, "disp_ret": 0x189C, "trap_exit": 0x196B,
         "attract": 0x03B5, "credits": 0xC08D, "sp_reset": 0xC7FF,
     },
-    "supstarfa": {
+    "supstarf4": {
         "trap": 0x19DA, "disp": 0x2437, "disp_ret": 0x18A0, "trap_exit": 0x19D6,
         "attract": 0x03D9, "credits": 0xC08E, "sp_reset": 0xC7CF,
     },
@@ -396,7 +396,7 @@ def run(rom, verbose):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rom", default="supstarf",
+    ap.add_argument("--rom", default="supstarf1",
                     choices=sorted(SETS) + ["all"])
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()

@@ -9,7 +9,7 @@ held. Everything it asserts on is read back out of the running machine, either
 from the segment map or from the lamp/solenoid matrices, so a pass means the
 driver really produced it.
 
-    tools/rfranco_game.py [--rom supstarf|supstarfa|all] [--players 1..4] [--verbose]
+    tools/rfranco_game.py [--rom supstarf1|supstarf4|all] [--players 1..4] [--verbose]
 
 `--players N` coins up N credits, presses start N times and then plays all N
 players through every ball. The machine takes the turns in the order ball 1 for
@@ -66,7 +66,7 @@ CFGDIR = os.path.join(tempfile.gettempdir(), "rfranco-harness-cfg")
 os.makedirs(CFGDIR, exist_ok=True)
 PORT = 8933
 
-ROMS = ("supstarf", "supstarfa")
+ROMS = ("supstarf1", "supstarf4")
 
 # Segment indices, from the 8279 RAM map in rfrancogames.c.
 PLAYER = [(0, 7), (8, 7), (16, 7), (24, 7)]
@@ -458,7 +458,7 @@ def run(rom, players, verbose):
 
         # Balls per game is an operator adjustment, zone 1, and the ROM has
         # already written its default by now. Read it rather than assuming.
-        balls_addr = {"supstarf": 0xC1E9, "supstarfa": 0xC1EA}[rom]
+        balls_addr = {"supstarf1": 0xC1E9, "supstarf4": 0xC1EA}[rom]
         balls = m.mem(balls_addr)[0]
         if not 1 <= balls <= 5:
             balls = 3
@@ -478,7 +478,7 @@ def run(rom, players, verbose):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rom", default="supstarf", choices=list(ROMS) + ["all"])
+    ap.add_argument("--rom", default="supstarf1", choices=list(ROMS) + ["all"])
     # Four score displays, so four players; the ROM stops lighting the start
     # button lamp once the fourth has been added.
     ap.add_argument("--players", type=int, default=1, choices=(1, 2, 3, 4))

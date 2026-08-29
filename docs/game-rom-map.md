@@ -3,15 +3,16 @@
 Four firmware revisions, one 27128 each, plain 8085 binaries (no scrambling):
 
 ```
-rev. 1  supstarf   m31-a-01187.ic19  16384 bytes  sha1 496d3c9664386ae64e94462db2fdd36811a68a87
-rev. 2  supstarfc  27128Prg.bin      16384 bytes  sha1 efdf60b53ac105985ca6d4eeb6ed48b893bb7ad8
-rev. 3  supstarfb  super.dat         16384 bytes  sha1 d10c6456716ca49cce590996e7271b8cd7026f38
-rev. 4  supstarfa  27c128.ic19       16384 bytes  sha1 e2f8dcf95084f755d3a34d77ba2649602687a610
+rev. 1  supstarf1  m31-a-01187.ic19  16384 bytes  sha1 496d3c9664386ae64e94462db2fdd36811a68a87
+rev. 2  supstarf2  27128Prg.bin      16384 bytes  sha1 efdf60b53ac105985ca6d4eeb6ed48b893bb7ad8
+rev. 3  supstarf3  super.dat         16384 bytes  sha1 d10c6456716ca49cce590996e7271b8cd7026f38
+rev. 4  supstarf4  27c128.ic19       16384 bytes  sha1 e2f8dcf95084f755d3a34d77ba2649602687a610
 ```
 
 **This document maps the first and last of the four**, which it calls set 1 and
 set 2 throughout — the names they had when it was written, and still their MAME
-names. Read "set 1" as rev. 1 and "set 2" as rev. 4.
+names. Read "set 1" as rev. 1 (`supstarf1`) and "set 2" as rev. 4 (`supstarf4`).
+Beware: "set 2" here is **not** PinMAME's `supstarf2`, which is rev. 2.
 
 Set 1 is mapped completely, byte by byte. Set 2 is mapped as a structured diff
 against set 1 — the two are the same program with insertions — plus a full

@@ -5,7 +5,7 @@ Boots the driver, triggers the coin, ball-start and bumper sounds, and reports
 what the 8035 actually programmed into the AY-3-8910 - decoded to frequencies
 and note names - then asserts the result is musically sensible.
 
-    tools/rfranco_sound.py [--rom supstarf|supstarfa|all] [--verbose]
+    tools/rfranco_sound.py [--rom supstarf1|supstarf4|all] [--verbose]
 
 How the capture works, since it needs no changes to the driver: the remote
 debugger's tracepoint log snapshots CPU registers by M6809 register id, and on
@@ -268,14 +268,14 @@ def check(name, passed, detail):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rom", default="supstarf",
-                    choices=["supstarf", "supstarfa", "all"])
+    ap.add_argument("--rom", default="supstarf1",
+                    choices=["supstarf1", "supstarf4", "all"])
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
     if not os.path.exists(BINARY):
         print(f"FAIL: {BINARY} not built", file=sys.stderr)
         return 2
-    roms = ["supstarf", "supstarfa"] if args.rom == "all" else [args.rom]
+    roms = ["supstarf1", "supstarf4"] if args.rom == "all" else [args.rom]
     worst = 0
     for rom in roms:
         worst = max(worst, run(rom, args.verbose))

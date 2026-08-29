@@ -38,13 +38,13 @@ import dis85
 
 ROMS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'roms')
 
-# The four built sets, in chronological order. Set letters are not
-# chronological: supstarfc (set C) predates supstarfb (set B).
+# The four built sets, in chronological order - which is also set-name order,
+# since PinMAME numbers them by revision.
 DEFAULT_SETS = [
-    ('rev1/supstarf',  'supstarf.zip',  'm31-a-01187.ic19'),
-    ('rev2/supstarfc', 'supstarfc.zip', '27128Prg.bin'),
-    ('rev3/supstarfb', 'supstarfb.zip', 'super.dat'),
-    ('rev4/supstarfa', 'supstarfa.zip', '27c128.ic19'),
+    ('supstarf1', 'supstarf1.zip', 'm31-a-01187.ic19'),
+    ('supstarf2', 'supstarf2.zip', '27128Prg.bin'),
+    ('supstarf3', 'supstarf3.zip', 'super.dat'),
+    ('supstarf4', 'supstarf4.zip', '27c128.ic19'),
 ]
 
 
@@ -146,7 +146,7 @@ def cmd_inventory(args):
               f'{sum(d) & 0xFF:>6X}{sum(d) & 0xFFFF:>7X}  {hashlib.sha1(d).hexdigest()}')
     print()
     print('A whole-image 8-bit sum of 0x00 means a checksum-correction byte at 0x3FFF;')
-    print('only rev. 4 (supstarfa) uses that scheme.')
+    print('only rev. 4 (supstarf4) uses that scheme.')
 
 
 def cmd_matrix(args):

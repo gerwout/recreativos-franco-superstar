@@ -3,22 +3,22 @@
 *Traduccion del documento vpx-table-reference.md; la version inglesa es la de referencia.*
 
 Driver de PinMAME: `src/wpc/rfranco.c` / `rfranco.h` / `rfrancogames.c`
-ROM sets: `supstarf` — «Super Star» (9 zonas de ajuste de operador; la revisión
-que documenta el manual de fábrica) y `supstarfa` — «Super Star (rev. 2)»
-(firmware más nuevo: 19 zonas, más correcciones reales como la condición de
-carrera en el despertar entre CPUs y el watchdog de contactos pegados). En este
-documento «set 1» y «set 2» se refieren a estos dos, coincidiendo con los
-nombres de los ROM sets.
+ROM sets: `supstarf1` — «Super Star (rev. 1)» (9 zonas de ajuste de operador; la
+revisión que documenta el manual de fábrica) y `supstarf4` — «Super Star
+(rev. 4)» (firmware más nuevo: 19 zonas, más correcciones reales como la
+condición de carrera en el despertar entre CPUs y el watchdog de contactos
+pegados). En este documento «set 1» y «set 2» se refieren a estos dos — los
+nombres que tenían cuando se escribió. El set 2 es `supstarf4`, **no**
+`supstarf2`.
 
-> Desde entonces se han volcado dos revisiones más, `supstarfb` y `supstarfc`.
+> Desde entonces se han volcado dos revisiones más, `supstarf2` y `supstarf3`.
 > Se sitúan **entre** estas dos en la cadena — el set 1 es la rev. 1 y el set 2
-> es la rev. **4** de cuatro — y el driver todavía no tiene entradas para ellas,
-> así que una mesa no puede seleccionarlas. Nada de este documento cambia: todo
-> lo que sigue describe el set 1 y el set 2 tal como se nombran. Las dos
-> revisiones nuevas se diferencian del set 1 únicamente en correcciones internas
-> (véase `rom-revision-chain.md`); conservan las nueve zonas de operador del
-> set 1 y su comportamiento de juego, así que una mesa escrita para el set 1
-> les sirve sin cambios.
+> es la rev. **4** de cuatro — y el driver ya tiene entradas para ellas, así que
+> una mesa puede seleccionarlas. Nada de este documento cambia: todo lo que
+> sigue describe las revs. 1 y 4. Las dos revisiones nuevas se diferencian de la
+> rev. 1 únicamente en correcciones internas (véase `rom-revision-chain.md`);
+> conservan las nueve zonas de operador de la rev. 1 y su comportamiento de
+> juego, así que una mesa escrita para la rev. 1 les sirve sin cambios.
 
 Placas: CPU 53/3291 (8085A + 8035 de sonido + 2 x AY-3-8910), driver 53/3308,
 display 53/3307, fuente de alimentación 53/3309, interconexión 53/3310,
@@ -73,7 +73,7 @@ Ausencias que harán tropezar al autor de una mesa:
 ### 0.1 Carga desde el script de la mesa
 
 ```vbscript
-Const cGameName = "supstarf"      ' rev. 1 - or "supstarfa" for rev. 2
+Const cGameName = "supstarf1"     ' rev. 1 - or "supstarf4" for rev. 4
 With Controller
     .GameName = cGameName
     .SplashInfoLine = "Super Star (Recreativos Franco 1986)"
@@ -670,7 +670,7 @@ de partida (switch 28)** es el único control dentro de todos los menús.
 
 ### 5.1 AJUSTES DE TANTEO Y TEST DE CONTACTOS (ambos switches cerrados)
 
-Nueve zonas en `supstarf`. **El número de zona se muestra en el dígito de
+Nueve zonas en `supstarf1`. **El número de zona se muestra en el dígito de
 unidades del display de créditos** (índice de segmento 33).
 
 Procedimiento según el manual:
@@ -708,7 +708,7 @@ tampoco los cuatro contactos cableados en paralelo con otro — cerrar cualquier
 de las dos mitades de un par informa del número más alto del par (véase el
 apéndice).
 
-### 5.1.1 Las diez zonas extra de `supstarfa`
+### 5.1.1 Las diez zonas extra de `supstarf4`
 
 El firmware más nuevo amplía el menú a **diecinueve** zonas: las nueve del
 set 1 sin cambios, y después diez más mostradas como 10–19. (Su tabla de saltos
@@ -892,7 +892,7 @@ escribe el switch directamente está por su cuenta — el driver, a propósito, 
 toca un switch que no esté cambiando en ese momento (véase abajo), así que no
 le acortará el pulso.
 
-**(3) Solo en `supstarfa`: no deje cerrado el switch 11, 12, 18 o 47.**
+**(3) Solo en `supstarf4`: no deje cerrado el switch 11, 12, 18 o 47.**
 
 El set 2 tiene un watchdog de contactos pegados que el set 1 no tiene. Un
 contacto mantenido cerrado durante unas 128 pasadas consecutivas del bucle de

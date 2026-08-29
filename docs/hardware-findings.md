@@ -25,10 +25,12 @@ the disagreement is called out.
 
 **A note on "set 1" and "set 2".** This document, like `game-rom-map.md` and
 `vpx-table-reference.md`, was written when only two game ROMs were known and uses
-those names throughout. Four revisions exist; set 1 is rev. 1 and set 2 is
-rev. **4**. The two dumped since (`supstarfb`, `supstarfc`) sit between them and
-carry set 1's hardware behaviour — same NVRAM window, same sound interface, same
-switch wiring — so nothing below changes. See `rom-revision-chain.md`.
+those names throughout. Four revisions exist; set 1 is rev. 1 (`supstarf1`) and
+set 2 is rev. **4** (`supstarf4`) — "set 2" here is **not** PinMAME's
+`supstarf2`, which is rev. 2. The two dumped since (`supstarf2`, `supstarf3`) sit
+between them and carry set 1's hardware behaviour — same NVRAM window, same sound
+interface, same switch wiring — so nothing below changes. See
+`rom-revision-chain.md`.
 
 Analysis artifacts live in `../ghidra/out/`. Regenerate with:
 
@@ -38,7 +40,7 @@ GHIDRA_INSTALL_DIR=/usr/share/ghidra ./venv/bin/python scripts/deep_analyze.py
 GHIDRA_INSTALL_DIR=/usr/share/ghidra ./venv/bin/python scripts/export_analysis.py /ic19_game.bin
 ```
 
-Addresses are set 1 (`supstarf`) unless stated otherwise.
+Addresses are set 1 (`supstarf1`) unless stated otherwise.
 
 **A note on how to read this document.** Part V records findings that were later
 disproved. They are kept deliberately: several of them looked convincing for
@@ -996,7 +998,7 @@ Boots the driver headless against the remote debugger, polls until it reaches
 steady state, then asserts on the invariants established during bring-up.
 
 ```
-tools/rfranco_check.py [--rom supstarf] [--verbose]
+tools/rfranco_check.py [--rom supstarf1] [--verbose]
 ```
 
 It detects the settle programmatically rather than sleeping a fixed time, and then
@@ -1021,7 +1023,7 @@ wherever it can.
 |---|---|
 | `rfranco_game.py` | Plays a complete game on either set — coin, credit, start, ball served, scoring, both drop-target banks, collecting a special, ball 1/2/3 with bonus, game over, final score held — and asserts on lamps, coils and digits at every step |
 | `rfranco_soak.py` | Many games with randomised playfield traffic, checking after every game that the fault handler has not latched, the display is not on the fault fill, the stack has not walked and both CPUs are still running |
-| `rfranco_zones.py` | Walks the AJUSTES menu on either set and prints each zone with its display and the NVRAM behind it. This is what established `supstarfa`'s ten extra zones |
+| `rfranco_zones.py` | Walks the AJUSTES menu on either set and prints each zone with its display and the NVRAM behind it. This is what established `supstarf4`'s ten extra zones |
 
 `rfranco_zones.py` is also the reason the driver exposes the two door switches on
 switches 23/24: the menu cannot be walked with a DIP setting, because the ROM
@@ -1067,7 +1069,7 @@ closed are listed underneath with what closed them.
 8. **Connector JA pin numbering.** The errata reverses the whole connector and the
    two boards' sheets number it in opposite directions. Signal names are reliable;
    pin numbers on JA are not.
-9. **`supstarfa` zone 13 (`C7F4`)** - *closed*. Measured on the running machine
+9. **`supstarf4` zone 13 (`C7F4`)** - *closed*. Measured on the running machine
    by driving both counters through the debugger, and the earlier reading of
    the `C006` load as a second gate was wrong. The check at `0x0CBC` runs when
    the avance ladder steps into the rung held in `C1F9` (the zone-2 extra-ball
@@ -1087,7 +1089,7 @@ closed are listed underneath with what closed them.
    extra-ball replay (measured 3 → 0), so `C7F4` is the maximum number of
    *consecutive* extra balls on one ball in play — at the default of 1, one
    per ball, every ball.
-10. **`supstarfa` zone 19 (`C7FD`)** - *closed*. It is the end-of-ball bonus
+10. **`supstarf4` zone 19 (`C7FD`)** - *closed*. It is the end-of-ball bonus
    collect. The drain handler (`0x0A39` → `0x11AF`) reaches the gate at
    `0x11E6` only when the player's ladder flag — `C20E` + 3·(player−1),
    indexed by `0x1528`, set to `0xFF` the first time the ladder lights — is
@@ -1123,7 +1125,7 @@ closed are listed underneath with what closed them.
 |---|---|
 | Whether solenoid 2 fires at all, or is only inferred from `0x1754` | Observed. Completing a drop-target bank lights the ESPECIAL lamp; collecting it at the *rampa especial* awards a credit and gates 4028 output 1, on both sets. What remains open is only which coil sits on that output — item 1 above |
 | Which contacts fire the two EXPULSOR coils on 53/3311 | The contact drawing and the parts list: they are the two slingshots (*rechazadores*), contacts 24 and 25, both wired in parallel onto AD0 = switch 11 (§7.4). Not the *rampa especial* lanes |
-| `supstarfa`'s extra adjustment zones | Ten of them, not sixteen; walked on the machine, each one's NVRAM byte and range established, and all ten effects measured by changing the value (§8, `vpx-table-reference.md` §5.1.1). Zones 13 and 19 were the last two, measured later — items 9 and 10 above |
+| `supstarf4`'s extra adjustment zones | Ten of them, not sixteen; walked on the machine, each one's NVRAM byte and range established, and all ten effects measured by changing the value (§8, `vpx-table-reference.md` §5.1.1). Zones 13 and 19 were the last two, measured later — items 9 and 10 above |
 | Whether set 2 plays a complete game | It does, and so does set 1. `tools/rfranco_game.py` plays coin → credit → start → ball served → scoring → ball 1/2/3 → game over → final score held, and asserts on lamps, coils and digits at each step |
 | Whether the harness's "error path" figure could be trusted | Superseded: the debugger endpoints take `&cpu=N` and the harness asserts on machine state instead |
 
@@ -1297,8 +1299,8 @@ forward as an open item at ~42%, is now closed: `sound-rom-map.md` classifies al
 
 Superseding the harness description earlier in this document.
 
-`tools/rfranco_check.py` now covers **both** ROM sets: `--rom supstarf`,
-`--rom supstarfa` or `--rom all`. It carries a per-set address table (TRAP entry
+`tools/rfranco_check.py` now covers **both** ROM sets: `--rom supstarf1`,
+`--rom supstarf4` or `--rom all`. It carries a per-set address table (TRAP entry
 0x1800 / 0x19DA, after-display-call 0x189C / 0x18A0, TRAP exit 0x196B / 0x19D6,
 attract loop 0x03B5 / 0x03D9, credits C08D / C08E, stack base C7FF / C7CF), and
 cross-checks two of those entries against the ROM at run time - the `LXI SP`

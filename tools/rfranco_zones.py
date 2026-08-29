@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Walk the AJUSTES DE TANTEO operator menu and record every zone.
 
-The manual documents nine zones, which is what `supstarf` has. `supstarfa`
+The manual documents nine zones, which is what `supstarf1` has. `supstarf4`
 carries more, and they are not documented anywhere; this walks the menu on a
 running machine and writes down what the displays actually show, plus the
 NVRAM the ROM reads back for each zone.
 
-    tools/rfranco_zones.py [--rom supstarf|supstarfa|all] [--steps N] [--json]
+    tools/rfranco_zones.py [--rom supstarf1|supstarf4|all] [--steps N] [--json]
 
 How the menu is driven. The two door switches are the mode; the start button
 (switch 28) is the only other control, and what it does depends on where the
@@ -61,12 +61,12 @@ SEVEN = {0x3F: '0', 0x06: '1', 0x5B: '2', 0x4F: '3', 0x66: '4', 0x6D: '5',
 # window the extra zones live in. Both established from the menu dispatcher
 # rather than assumed. It is at 0x3255 in BOTH sets - the menu entry loads the
 # zone counter with 1 at 0x3262 and the dispatcher reads it back at 0x3272,
-# where set 1 bounds it with CP 0x0A and set 2 with CP 0x1A. That bound is where
-# set 2's extra zones come from; how many of them the counter actually reaches
+# where rev. 1 bounds it with CP 0x0A and rev. 4 with CP 0x1A. That bound is where
+# rev. 4's extra zones come from; how many of them the counter actually reaches
 # is a question for this script.
 SETS = {
-    "supstarf":  {"zone": 0xC01D, "nv": (0xC1E9, 0x30), "extra": None},
-    "supstarfa": {"zone": 0xC01D, "nv": (0xC1EA, 0x30), "extra": (0xC7F0, 0x10)},
+    "supstarf1": {"zone": 0xC01D, "nv": (0xC1E9, 0x30), "extra": None},
+    "supstarf4": {"zone": 0xC01D, "nv": (0xC1EA, 0x30), "extra": (0xC7F0, 0x10)},
 }
 
 
@@ -224,7 +224,7 @@ def run(rom, steps, as_json):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rom", default="supstarfa", choices=sorted(SETS) + ["all"])
+    ap.add_argument("--rom", default="supstarf4", choices=sorted(SETS) + ["all"])
     ap.add_argument("--steps", type=int, default=30)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()

@@ -1,7 +1,8 @@
 # ROM sets and provenance — Super Star (Recreativos Franco, 1986)
 
-Two complete, verified sets. File names and set names follow MAME's
-`src/mame/pinball/supstarf.cpp` so the sets are interchangeable with MAME's.
+Two complete, verified sets. The internal ROM filenames follow MAME's
+`src/mame/pinball/supstarf.cpp` so the sets are interchangeable with MAME's; the
+set names follow the PinMAME driver, `src/wpc/rfrancogames.c`.
 
 Built sets live in `../roms/`; the source dumps in `../romdumps/`. The build
 recipe is in `../roms/README.md`.
@@ -10,7 +11,7 @@ recipe is in `../roms/README.md`.
 > (`77C43E87` and `51697AFF`, from `romdumps/super_star_setC.zip` and
 > `romdumps/super_star_rev3.zip`). There are **four** firmware revisions, and the
 > two documented here are the first and the last of the chain — so "set 2" below
-> is rev. **4**, not rev. 2. Everything this document says about those two images
+> is rev. **4**, not rev. 2, and is PinMAME's `supstarf4`, **not** `supstarf2`. Everything this document says about those two images
 > and about the sound ROM still holds; the ordering claim in §2 is still correct
 > as far as it goes. See `rom-revision-chain.md` for the full four-way analysis.
 
@@ -18,7 +19,7 @@ recipe is in `../roms/README.md`.
 
 ## 1. The two sets
 
-### `supstarf` — set 1 (MAME parent)
+### `supstarf1` — set 1, rev. 1 (MAME parent `supstarf`)
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|
@@ -27,7 +28,7 @@ recipe is in `../roms/README.md`.
 
 Both files match MAME's `supstarf` definitions exactly.
 
-### `supstarfa` — set 2 (MAME clone)
+### `supstarf4` — set 2, rev. 4 (MAME clone `supstarfa`)
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|

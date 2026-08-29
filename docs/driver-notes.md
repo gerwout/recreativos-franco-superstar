@@ -6,11 +6,11 @@ shared Intel 8085 CPU core.
 Files: `src/wpc/rfranco.c`, `src/wpc/rfranco.h`, `src/wpc/rfrancogames.c`,
 `src/cpu/i8085/i8085.c`, `src/cpu/i8085/i8085.h`, plus two lines each in
 `src/pinmame.mak` (`rfranco.o` in `DRVLIBS`, `rfrancogames.o` in `PINGAMES`) and
-`src/wpc/driver.c` (`DRIVERNV(supstarf)`, `DRIVERNV(supstarfa)`), and the same
+`src/wpc/driver.c` (`DRIVERNV(supstarf1)` through `DRIVERNV(supstarf4)`), and the same
 three source names in the per-file build lists under `vcproj/` and `cmake/`. The
 `vcproj/` half is commit `4e8283e1`: `src/wpc/driver.c` is in every project, so
 without it the MSVC builds compiled everything and then failed to link
-`driver_supstarf` / `driver_supstarfa`.
+the `driver_supstarf*` symbols.
 
 Companion documents: `hardware-findings.md` (the full derivation and its audit
 trail), `vpx-table-reference.md` (switch/lamp/solenoid tables),
@@ -473,7 +473,7 @@ It was raised for the sound handshake before the trigger-based READY model
 existed. Retested empirically (2026-08-11) on a scratch copy of the tree with
 `RFRANCO_SOUND_GUARD_US 4000` in place: one rebuild per rung, and for every
 rung `rfranco_check.py --rom all`, plus `rfranco_game.py --rom all` where the
-check passed, plus `rfranco_sound.py --rom supstarf` at the surviving rungs,
+check passed, plus `rfranco_sound.py --rom supstarf1` at the surviving rungs,
 all from a cold NVRAM in a private `-nvram_directory` (see the caveats below).
 
 | Interleave | check sf | check fa | game sf | game fa | sound sf |
@@ -492,10 +492,10 @@ The failure modes, lowest first:
   set 2) and the 8035 stuck in its `0x0D8-0x0EF` init. The READY trigger only
   covers the per-byte stall in `rfranco_sound_w`; the power-on handshake is
   still interleave-carried, so the constant cannot go anywhere near 1.
-* **50: supstarfa never settles.** TRAP entries outnumber completed display
+* **50: supstarf4 never settles.** TRAP entries outnumber completed display
   passes ~4x (935 entries vs 248 display calls in one window) - handler passes
   start but do not finish. Genuine, reproduced twice.
-* **100: supstarf's end-of-ball bonus assert fails.** The avance ladder is
+* **100: supstarf1's end-of-ball bonus assert fails.** The avance ladder is
   consumed in-play instead of surviving to the drain, so `rfranco_game` sees
   per-turn bonus `[0, 0, 0]`. The total final score is identical to the 500
   run (292330), every other check passes, `C01C` stays clear - so this is the
@@ -508,7 +508,7 @@ The failure modes, lowest first:
 **Conclusion: `MDRV_INTERLEAVE(250)`**, applied to the driver. Lowest
 fully-passing rung (150) x 1.7, 5x the highest `rfranco_check` failure (50).
 Passes check, game and sound repeatedly on both sets. What it buys, measured
-headless on supstarf in steady attract (30 s `/proc` utime+stime samples, two
+headless on supstarf1 in steady attract (30 s `/proc` utime+stime samples, two
 runs each, spread < 0.001):
 
 | Interleave | emulated speed (vs wall) | host CPU fraction | CPU per emulated second |
@@ -524,7 +524,7 @@ time of the harness suite by ~30-40% (`check --rom all` 91 s -> 73 s,
 `game --rom all` 169 s -> 131 s). The slice quantum at 250 is ~67 us, still
 far inside the 4000 us sound guard's 1230 us margin (§5). If it is ever
 lowered again the symptoms appear in this order: `rfranco_game`'s bonus
-attribution (~100), supstarfa's settle (~50), a power-on wedge (~20).
+attribution (~100), supstarf4's settle (~50), a power-on wedge (~20).
 
 Two caveats earned the hard way during this retest, worth keeping:
 
@@ -545,13 +545,13 @@ Two caveats earned the hard way during this retest, worth keeping:
   on a clean exit, and since the door switches became toggles that file carries
   their position: press `8` in an interactive session, quit with `Esc`, and
   every later launch boots into TEST DE LUCES. Measured - with such a cfg in
-  place `rfranco_check` fails on `supstarfa` with "the credit display never came
+  place `rfranco_check` fails on `supstarf4` with "the credit display never came
   up", which reads as a driver fault and is not one. The old DIP persisted the
   same way, so this was always possible; it is just easy to trigger now. The
   scratch directory also means a run cannot overwrite the user's own settings.
 * `tools/rfranco_zones.py` is the worst of them, and it does not assert - it
   reports what it managed to reach, so a short walk looks like a finding rather
-  than a flake. On `supstarfa`, which has 19 zones, three consecutive runs on
+  than a flake. On `supstarf4`, which has 19 zones, three consecutive runs on
   one machine reached 12, 18 and 8 of them, stopping wherever a `next_zone`
   press loop happened to time out; the sampled zone *values* wobble too, because
   the display is read at whatever point the ROM's redraw has got to. Measured
@@ -567,13 +567,13 @@ Two caveats earned the hard way during this retest, worth keeping:
   zero-initialised tail. Correct in both build types (index 15 is zero either
   way), but in a `MAME_DEBUG` build nibbles `0x0A`-`0x0E` render as letters
   where a 7447 would not.
-* `supstarfa`'s zone 13 (`C7F4`) is now settled behaviourally — it is the
+* `supstarf4`'s zone 13 (`C7F4`) is now settled behaviourally — it is the
   extra-ball cap per *ball in play*, not per game: `0x0CBC`'s refusal (`RC` at
   `0x0CC4`) happens before `C006` is even loaded, `C006`'s sign only selects
   which side's BOLA EXTRA lamp arms, and a drain without the earned lamp zeroes
   `C7F7`. Isolated with PC hit counters and forced NVRAM on the running
   machine — `hardware-findings.md` §15.9 has the trials.
-* `supstarfa`'s zone 19 (`C7FD`) is the end-of-ball bonus collect: at 1 the
+* `supstarf4`'s zone 19 (`C7FD`) is the end-of-ball bonus collect: at 1 the
   drain pays out the avance ladder through the countdown at `0x0F9E`
   (measured: +10 000 and +30 000 from the matching rungs, the last ball
   included), at 0 the call at `0x11E6` is skipped and the value is lost.
@@ -728,7 +728,7 @@ drivers do — `idsa.c` (also Spanish, also 8085-era), `mac.c`, `jeutel.c`. Noth
 in the handler is once-only, so there is no init hook left to keep. `coreData->reset()`
 also runs on the first pass, so cold boot behaviour is unchanged.
 
-Measured on `supstarf`, at the time through the controls of §7B's first design
+Measured on `supstarf1`, at the time through the controls of §7B's first design
 (the door switches were then switches 23 and 24, lifting a DIP at its *juego*
 default; they are switches 1 and 2 now, and the route is otherwise the same):
 
@@ -760,7 +760,7 @@ to the generic mech handler (`core.c:1783`) and `mech.c` to its own updates
 `0xff` — so keyboard play is unchanged and a table can take the trough over
 completely by setting it to `0`.
 
-Measured on `supstarf` with the flag forced to `0`:
+Measured on `supstarf1` with the flag forced to `0`:
 
 | | Result |
 |---|---|
@@ -794,7 +794,7 @@ both sets still pass `tools/rfranco_check.py` and `tools/rfranco_game.py`.
 | A complete game plays on both sets | `tools/rfranco_game.py --rom all`: coin → credit → start button lamp → start → SALIDA BOLAS → JUGADOR 1 and BOLA 1 lamps → eight playfield contacts each scoring → both drop-target banks lighting their ESPECIAL lamps → collecting one awards a credit and gates the knocker → ball 1/2/3 each ending with its bonus and each being re-served → FIN DE JUEGO → the final score held into attract, with `C01C` still 0 |
 | Solenoid 2 fires on a replay award | Observed rather than inferred: the coil select taken off PSG1 port B reads 4028 output 1 at the same moment the credit appears, on both sets. Which coil is on that output is §7.1 |
 | The two *expulsores* are the slingshots | Manual page 3's contact drawing places contacts 24 and 25 inside the two bottom-corner triangles; the parts list names that mechanism *rechazador*; it is the only coil mechanism the driver board's JL connector does not account for, and there are two of them. The ROM's own contact test independently says 24+25 are paralleled onto AD0 |
-| `supstarfa` has ten extra operator zones, not sixteen | Walked on the machine: the BCD zone counter steps 9 → 10 and stops at 19, so six of the jump table's 25 entries are unreachable. Each new zone's NVRAM byte and displayed range were read off the machine while walking the menu, and all ten effects were then established by changing the value and measuring the difference — zones 13 and 19 last, isolated with PC hit counters and forced NVRAM after plain replay trials could not separate them; see `hardware-findings.md` §15.9 and §15.10 |
+| `supstarf4` has ten extra operator zones, not sixteen | Walked on the machine: the BCD zone counter steps 9 → 10 and stops at 19, so six of the jump table's 25 entries are unreachable. Each new zone's NVRAM byte and displayed range were read off the machine while walking the menu, and all ten effects were then established by changing the value and measuring the difference — zones 13 and 19 last, isolated with PC hit counters and forced NVRAM after plain replay trials could not separate them; see `hardware-findings.md` §15.9 and §15.10 |
 
 Not verified against real hardware: nothing here has been checked on a physical
 machine. Everything is derived from the factory manual, the two ROM images and the
@@ -817,8 +817,8 @@ There are now four tools, all under `tools/`:
 | `rfranco_zones.py` | Walks the AJUSTES menu and prints every zone with its display and its NVRAM |
 
 
-`tools/rfranco_check.py` now covers **both** ROM sets: `--rom supstarf`,
-`--rom supstarfa` or `--rom all`. It carries a per-set address table (TRAP entry
+`tools/rfranco_check.py` now covers **both** ROM sets: `--rom supstarf1`,
+`--rom supstarf4` or `--rom all`. It carries a per-set address table (TRAP entry
 0x1800 / 0x19DA, after-display-call 0x189C / 0x18A0, TRAP exit 0x196B / 0x19D6,
 attract loop 0x03B5 / 0x03D9, credits C08D / C08E, stack base C7FF / C7CF), and
 cross-checks two of those entries against the ROM at run time - the `LXI SP`
