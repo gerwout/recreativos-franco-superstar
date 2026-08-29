@@ -7,11 +7,11 @@ For the switch numbering itself, what each contact is and where it sits on the
 playfield, see `vpx-table-reference.md` §1. This document only answers "what do I
 press".
 
-Sets: `supstarf` (set 1) and `supstarfa` (set 2). The keyboard map is identical
-for both — it comes from the driver's input ports and PinMAME's own manual-switch
-handler, neither of which differs between the sets.
+Sets: `supstarf1` through `supstarf4` (revs. 1-4). The keyboard map is identical
+for all four — it comes from the driver's input ports and PinMAME's own
+manual-switch handler, neither of which differs between the sets.
 
-> Everything in the tables below was measured on a running `supstarf`: real X key
+> Everything in the tables below was measured on a running `supstarf1`: real X key
 > events were delivered to the emulator and `coreGlobals.swMatrix` was read back
 > over the debug HTTP API after each one. See §7 for exactly what was checked.
 
@@ -19,7 +19,7 @@ handler, neither of which differs between the sets.
 
 ```bash
 cd /code/superstar/pinmame
-./xpinmamed.x11 supstarf -s 3 -skip_disclaimer -skip_gameinfo -rp roms
+./xpinmamed.x11 supstarf1 -s 3 -skip_disclaimer -skip_gameinfo -rp roms
 ```
 
 `-s 3` scales the 256×256 render to a 768×768 window; `-skip_disclaimer` drops
@@ -198,11 +198,11 @@ keyboard-specific version.
    the matrix bit behind the driver's back and the two states drift apart.
 
 3. **Release momentary contacts.** Because the chords latch, a bumper or rollover
-   you close and forget stays closed. On `supstarfa` that faults the machine:
+   you close and forget stays closed. On `supstarf4` that faults the machine:
    its watchdog at `0x3ABF` watches switches 11, 12, 18 and 47 and calls the falta
    handler after ~128 consecutive game-loop passes — around 7 s. Every digit then
    shows the 7447's pattern for 14 and stays there, which looks like a display
-   bug. Read `C01C`: `0xFF` means the ROM faulted. `supstarf` tolerates the same
+   bug. Read `C01C`: `0xFF` means the ROM faulted. `supstarf1` tolerates the same
    stuck contact indefinitely.
 
 4. **A ball that has not scored is not counted.** Draining a ball that has touched
@@ -274,7 +274,7 @@ The test covers only the 23 playfield contacts. The four cabinet inputs are not
 in it, and neither are the contacts wired in parallel with another one — closing
 either half of a pair reports the pair's higher number.
 
-`supstarf` has 9 zones; `supstarfa` has 19, and its extra ten are tabulated in
+`supstarf1` has 9 zones; `supstarf4` has 19, and its extra ten are tabulated in
 `vpx-table-reference.md` §5.1.1.
 
 ### Getting back to a game
@@ -285,7 +285,7 @@ for good, press `7` and `8` until the readout says `Ajuste abajo` and
 
 **A toggle's position survives quitting**, exactly as the old DIP setting did.
 Pressing a toggle flips `in->default_value` (`src/inptport.c:2550`), and that is
-the field MAME writes to `~/.xpinmame/cfg/supstarf.cfg` on `Esc` and reads back
+the field MAME writes to `~/.xpinmame/cfg/supstarf1.cfg` on `Esc` and reads back
 at the next launch. So a machine left with both switches up comes back up in
 AJUSTES. Put them down before quitting, or delete that file.
 
@@ -312,7 +312,7 @@ driving the switches over the debug API instead of the keyboard.
 
 ## 7. How this was verified
 
-Measured on `supstarf` running under `xpinmamed.x11` on a virtual X server. Key
+Measured on `supstarf1` running under `xpinmamed.x11` on a virtual X server. Key
 events were delivered to the emulator window with `xdotool` and the resulting
 switch matrix read back from `/api/info`, whose `switches` field is a straight hex
 dump of `coreGlobals.swMatrix`.

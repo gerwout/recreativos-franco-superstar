@@ -3,8 +3,8 @@
 Reverse engineering tools and documentation for the Recreativos Franco
 *Super Star* pinball machine — and the home of the analysis behind its PinMAME
 driver. The driver is upstream: `src/wpc/rfranco.c` in
-[`vpinball/pinmame`](https://github.com/vpinball/pinmame), with sets `supstarf`
-and `supstarfa`.
+[`vpinball/pinmame`](https://github.com/vpinball/pinmame), with sets `supstarf1`
+through `supstarf4`.
 
 The machine: Intel 8085A game CPU, an Intel 8035 sound CPU driving two
 AY-3-8910s, four CD4028 decoders multiplexing lamps and coils over the two
@@ -31,21 +31,21 @@ unexplained; see `docs/`.
 | `super-star-pinball-manual.md` / `.pdf` | The factory manual — transcription and original scan |
 | `ghidra/` | Disassembly project and export scripts |
 
-## The four ROM revisions — use `supstarfa`
+## The four ROM revisions — use `supstarf4`
 
 There are **four** firmware revisions, not two. They form a single linear chain,
 and the two sets MAME has are its first and last links; two more were dumped
-later and sit in between. The PinMAME set letters are deliberately *not*
-chronological — they were assigned before the order was known:
+later and sit in between. PinMAME numbers all four in chronological order (the
+two new sets were once lettered "set B" and "set C", before the order was known):
 
 | chronological | image | CRC32 | set |
 |---|---|---|---|
-| rev. 1 | `m31-a-01187.ic19` | `AB8B1148` | `supstarf` |
-| rev. 2 | `27128Prg.bin` | `77C43E87` | `supstarfc` ("set C") |
-| rev. 3 | `super.dat` | `51697AFF` | `supstarfb` ("set B") |
-| rev. 4 | `27c128.ic19` | `9A440461` | `supstarfa` |
+| rev. 1 | `m31-a-01187.ic19` | `AB8B1148` | `supstarf1` (MAME `supstarf`) |
+| rev. 2 | `27128Prg.bin` | `77C43E87` | `supstarf2` (was "set C") |
+| rev. 3 | `super.dat` | `51697AFF` | `supstarf3` (was "set B") |
+| rev. 4 | `27c128.ic19` | `9A440461` | `supstarf4` (MAME `supstarfa`) |
 
-**`supstarfa.zip` is still the preferred set.** It is the last of the four, and
+**`supstarf4.zip` is still the preferred set.** It is the last of the four, and
 the difference is not cosmetic: reverse engineering rev. 1 turned up real defects
 that later revisions demonstrably fix. What each one added:
 
@@ -72,22 +72,21 @@ zones the factory manual documents.
 The ordering evidence and a per-revision changelog are in
 `docs/rom-revision-chain.md`; `tools/rom_diff.py` regenerates all of it.
 
-One bug is in the **sound ROM shared by both revisions** and is emulated
+One bug is in the **sound ROM shared by all four revisions** and is emulated
 faithfully: the ball-start handler queues three musical phrases but plays only
 the first, because the tune terminator wipes the stack pointer — confirmed
 against a recording of a real machine (`docs/sound-rom-map.md` §6).
 
 ## Status
 
-`supstarf` and `supstarfa` are fully playable in PinMAME and marked working —
+`supstarf1` and `supstarf4` are fully playable in PinMAME and marked working —
 coins, a complete multi-player game, specials, replay and knocker, bonus,
 operator menus, sound. Every claim in the docs is labelled measured or inferred;
 the one remaining inference in the driver (which physical coil sits on the
 replay output) is documented in `docs/questions-for-a-real-machine.md`.
 
-`supstarfb` and `supstarfc` are built in `roms/` and analysed in full, but have
-**not** been run yet: the driver has no entries for them. Adding two
-`RFRANCO_ROMSTART` + `CORE_CLONEDEFNV` blocks to `src/wpc/rfrancogames.c` is all
-they need — no driver code, since all four revisions share the same hardware,
-NVRAM window, sound interface and switch wiring. Everything in
-`docs/rom-revision-chain.md` is static analysis until that happens.
+`supstarf2` and `supstarf3` are built in `roms/` and analysed in full, and the
+driver now carries entries for them — all four revisions share the same hardware,
+NVRAM window, sound interface and switch wiring, so no driver code was needed.
+They have not been run through the harnesses in `tools/` yet, so what
+`docs/rom-revision-chain.md` says about them remains static analysis.

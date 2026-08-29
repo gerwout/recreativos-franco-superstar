@@ -1,8 +1,9 @@
 # Super Star (Recreativos Franco, 1986) — ROM sets
 
 Four complete, verified ROM sets built from the dumps in `../romdumps/`.
-File names and set names follow MAME's `src/mame/pinball/supstarf.cpp` so the two
-sets MAME knows are interchangeable with MAME's.
+Set names follow the PinMAME driver, `src/wpc/rfrancogames.c`. The internal ROM
+filenames follow MAME's `src/mame/pinball/supstarf.cpp`, so the two sets MAME
+knows are interchangeable with MAME's.
 
 **There are four firmware revisions, not two.** They form a single linear chain,
 and MAME's two sets are its first and last links:
@@ -10,24 +11,26 @@ and MAME's two sets are its first and last links:
 ```
 chronological  image             CRC32      set name    where
 -------------  ----------------  --------   ---------   ---------------------------
-rev. 1         m31-a-01187.ic19  AB8B1148   supstarf    MAME parent
-rev. 2         27128Prg.bin      77C43E87   supstarfc   NEW - PinMAME "set C"
-rev. 3         super.dat         51697AFF   supstarfb   NEW - PinMAME "set B"
-rev. 4         27c128.ic19       9A440461   supstarfa   MAME clone, labelled "rev. 2"
+rev. 1         m31-a-01187.ic19  AB8B1148   supstarf1   MAME parent (supstarf)
+rev. 2         27128Prg.bin      77C43E87   supstarf2   NEW - formerly "set C"
+rev. 3         super.dat         51697AFF   supstarf3   NEW - formerly "set B"
+rev. 4         27c128.ic19       9A440461   supstarf4   MAME clone (supstarfa)
 ```
 
-**The set letters are not chronological, deliberately.** They were assigned
-before the order was known, and "set B / set C" was chosen precisely so as not
-to imply one. Set C is the earlier firmware of the two new ones. The set names
-and the internal ROM filenames here match the PinMAME driver entries exactly, so
-do not rename them to follow the revision order.
+**The PinMAME set names are chronological.** They were not always: the two new
+sets were first labelled "set B" and "set C", lettered before the order was known
+and deliberately chosen so as not to imply one — set C is the earlier firmware of
+the two. PinMAME now numbers all four in revision order, so those letters survive
+only in older notes and in MAME, which still calls rev. 1 `supstarf` and rev. 4
+`supstarfa`. The set names and the internal ROM filenames here match the PinMAME
+driver entries exactly.
 
 The ordering evidence, and what each revision changed, is in
 `../docs/rom-revision-chain.md`. All four share the same sound ROM (§ Sound ROM).
 
 ## Contents
 
-### `supstarf.zip` — rev. 1
+### `supstarf1.zip` — rev. 1
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|
@@ -36,7 +39,7 @@ The ordering evidence, and what each revision changed, is in
 
 Both files match MAME's `supstarf` definitions exactly.
 
-### `supstarfc.zip` — "set C", chronologically rev. 2 (new)
+### `supstarf2.zip` — rev. 2 (new; formerly "set C")
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|
@@ -46,7 +49,7 @@ Both files match MAME's `supstarf` definitions exactly.
 Rev. 1 plus one change: the TRAP re-entrancy sentinel at the new NVRAM byte
 `C089`. Not in MAME.
 
-### `supstarfb.zip` — "set B", chronologically rev. 3 (new)
+### `supstarf3.zip` — rev. 3 (new; formerly "set B")
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|
@@ -56,7 +59,7 @@ Rev. 1 plus one change: the TRAP re-entrancy sentinel at the new NVRAM byte
 Set C plus the bounded sender spin that replaces `HLT`, the relocated TRAP
 sentinel, and an explicit stack reset on the attract entry. Not in MAME.
 
-### `supstarfa.zip` — rev. 4 (recommended)
+### `supstarf4.zip` — rev. 4 (recommended)
 
 | File | Size | CRC32 | SHA-1 |
 |---|---|---|---|
@@ -69,8 +72,8 @@ MAME's `supstarfa` exactly. **The sound ROM intentionally differs from MAME's
 `supstarfa` entry**, which still carries a `BAD_DUMP` (`B6EF3C7A`). See "Sound
 ROM" below — the good dump is provably the same data.
 
-> MAME and PinMAME both label this set *"Super Star (rev. 2)"*. With revs. 2 and
-> 3 now dumped, that label is wrong: it is rev. 4.
+> MAME still labels this set *"Super Star (rev. 2)"*. With revs. 2 and 3 now
+> dumped, that label is wrong: it is rev. 4, which is what PinMAME now calls it.
 
 ## Source archives
 
@@ -195,26 +198,26 @@ unrar x "start ranco ic19 128.rar" && unrar x super_start_franco2532.rar
 unzip "super star.zip"
 unzip -j super_star_setC.zip 27128Prg.bin super.dat -d setC
 
-mkdir -p supstarf supstarfb supstarfc supstarfa
-cp "start ranco ic19 128.BIN"   supstarf/m31-a-01187.ic19
-cp super_start_franco2532.BIN   supstarf/2532.ic4
-cp setC/super.dat               supstarfb/super.dat
-cp super_start_franco2532.BIN   supstarfb/2532.ic4
-cp setC/27128Prg.bin            supstarfc/27128Prg.bin
-cp super_start_franco2532.BIN   supstarfc/2532.ic4
-cp "super star/super"           supstarfa/27c128.ic19
-cp super_start_franco2532.BIN   supstarfa/2532.ic4
+mkdir -p supstarf1 supstarf2 supstarf3 supstarf4
+cp "start ranco ic19 128.BIN"   supstarf1/m31-a-01187.ic19
+cp super_start_franco2532.BIN   supstarf1/2532.ic4
+cp setC/27128Prg.bin            supstarf2/27128Prg.bin
+cp super_start_franco2532.BIN   supstarf2/2532.ic4
+cp setC/super.dat               supstarf3/super.dat
+cp super_start_franco2532.BIN   supstarf3/2532.ic4
+cp "super star/super"           supstarf4/27c128.ic19
+cp super_start_franco2532.BIN   supstarf4/2532.ic4
 
-(cd supstarf  && zip -X -9 ../supstarf.zip  m31-a-01187.ic19 2532.ic4)
-(cd supstarfb && zip -X -9 ../supstarfb.zip super.dat        2532.ic4)
-(cd supstarfc && zip -X -9 ../supstarfc.zip 27128Prg.bin     2532.ic4)
-(cd supstarfa && zip -X -9 ../supstarfa.zip 27c128.ic19      2532.ic4)
+(cd supstarf1 && zip -X -9 ../supstarf1.zip m31-a-01187.ic19 2532.ic4)
+(cd supstarf2 && zip -X -9 ../supstarf2.zip 27128Prg.bin     2532.ic4)
+(cd supstarf3 && zip -X -9 ../supstarf3.zip super.dat        2532.ic4)
+(cd supstarf4 && zip -X -9 ../supstarf4.zip 27c128.ic19      2532.ic4)
 ```
 
 The two new sets keep their dump filenames verbatim — `super.dat` and
 `27128Prg.bin`, including the capital `P` — because that is what the PinMAME
 driver entries name. The older two keep their socket-suffixed names. Both new
-names are distinct from `supstarfa`'s `27c128.ic19`, so a missing file cannot
+names are distinct from `supstarf4`'s `27c128.ic19`, so a missing file cannot
 silently fall back to another set's image.
 
 `RFRANCO_ROMSTART` (`src/wpc/rfranco.h`) loads the first file at `0x0000` for
